@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Env
+.env
+*.env.local
+
+# Node / Expo
+node_modules/
+.expo/
+dist/
+web-build/
+*.tgz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Alembic (keep versions tracked)
+# alembic/versions/*.pyc  — already caught by __pycache__
+
+# Logs
+*.log
