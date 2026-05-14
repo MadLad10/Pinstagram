@@ -1,4 +1,4 @@
-# BUILD_PLAN.md — Order of operations for Claude Code
+# BUILD_PLAN.md — Build order
 
 Build in this order. Don't skip ahead. Each step has a verifiable output.
 
