@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "Pinstagram",
+    "slug": "pinstagram",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.pinstagram.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We use your location to show nearby places and transport options.",
+        "NSCameraUsageDescription": "Camera is needed to take photos for posts.",
+        "NSPhotoLibraryUsageDescription": "Gallery access is needed to pick photos for posts."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.pinstagram.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-location",
+        { "locationAlwaysAndWhenInUsePermission": "We use your location to show nearby places." }
+      ]
+    ],
+    "scheme": "pinstagram",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
