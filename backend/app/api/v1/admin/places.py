@@ -9,6 +9,38 @@ from sqlalchemy import select
 router = APIRouter()
 
 
+@router.get("/places")
+async def list_all_places(db: DB, _admin: AdminUserID, cursor: str | None = None, limit: int = Query(20, le=50)):
+    import base64, json
+    result = await db.execute(select(Place).order_by(Place.created_at.desc()).limit(limit + 1))
+    places = result.scalars().all()
+    has_more = len(places) > limit
+    places = places[:limit]
+    items = [{"id": str(p.id), "name": p.name, "category": p.category, "area": p.area,
+              "avg_rating": float(p.avg_rating or 0), "review_count": p.review_count,
+              "is_featured": getattr(p, "is_featured", False)} for p in places]
+    next_cursor = base64.b64encode(json.dumps({"id": str(places[-1].id)}).encode()).decode() if has_more and places else None
+    return {"items": items, "next_cursor": next_cursor}
+
+
+@router.post("/places/{place_id}/feature", status_code=204)
+async def feature_place(place_id: uuid.UUID, db: DB, _admin: AdminUserID):
+    result = await db.execute(select(Place).where(Place.id == place_id))
+    place = result.scalar_one_or_none()
+    if place:
+        place.is_featured = True
+        await db.commit()
+
+
+@router.post("/places/{place_id}/unfeature", status_code=204)
+async def unfeature_place(place_id: uuid.UUID, db: DB, _admin: AdminUserID):
+    result = await db.execute(select(Place).where(Place.id == place_id))
+    place = result.scalar_one_or_none()
+    if place:
+        place.is_featured = False
+        await db.commit()
+
+
 @router.get("/places/pending")
 async def list_pending_places(db: DB, _admin: AdminUserID, cursor: str | None = None, limit: int = Query(20, le=50)):
     import base64, json

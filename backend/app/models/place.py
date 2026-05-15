@@ -35,6 +35,7 @@ class Place(Base, UUIDMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     avg_rating: Mapped[float] = mapped_column(Numeric(2, 1), default=0.0, nullable=False)
     review_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     save_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
