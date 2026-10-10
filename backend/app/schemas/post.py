@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class AuthorSnippet(BaseModel):
@@ -47,26 +48,41 @@ class PostRead(BaseModel):
 
 class PostCreate(BaseModel):
     place_id: uuid.UUID
-    file_key: str
-    media_type: str
-    caption: str | None = None
-    hashtags: list[str] | None = None
-    price_mentioned: int | None = None
-    rating: int | None = None
+    file_key: str = Field(pattern=r"^uploads/[0-9a-f-]{36}\.[a-z0-9]{1,5}$")
+    media_type: Literal["image", "video"]
+    caption: str | None = Field(None, max_length=2200)
+    hashtags: list[str] | None = Field(None, max_length=30)
+    price_mentioned: int | None = Field(None, ge=0)
+    rating: int | None = Field(None, ge=1, le=5)
+
+    @field_validator("hashtags")
+    @classmethod
+    def normalize_hashtags(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return None
+        tags = {t.strip().lstrip("#").lower() for t in v}
+        return sorted(t for t in tags if t)
 
 
 class CommentRead(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
     body: str
-    created_at: str
+    created_at: datetime
     author: AuthorSnippet | None = None
 
     model_config = {"from_attributes": True}
 
 
 class CommentCreate(BaseModel):
-    body: str
+    body: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("body")
+    @classmethod
+    def not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Comment cannot be empty")
+        return v.strip()
 
 
 class PaginatedPosts(BaseModel):

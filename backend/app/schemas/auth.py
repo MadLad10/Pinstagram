@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class SignupRequest(BaseModel):
@@ -14,6 +14,8 @@ class SignupRequest(BaseModel):
     def password_length(cls, v: str) -> str:
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters")
+        if len(v) > 128:
+            raise ValueError("Password must be at most 128 characters")
         return v
 
     @field_validator("name")
@@ -21,6 +23,8 @@ class SignupRequest(BaseModel):
     def name_not_empty(cls, v: str) -> str:
         if not v.strip():
             raise ValueError("Name cannot be empty")
+        if len(v.strip()) > 100:
+            raise ValueError("Name must be at most 100 characters")
         return v.strip()
 
 
@@ -39,7 +43,7 @@ class RefreshRequest(BaseModel):
 
 class VerifyEmailRequest(BaseModel):
     email: EmailStr
-    code: str
+    code: str = Field(pattern=r"^\d{6}$")
 
 
 class UserRead(BaseModel):

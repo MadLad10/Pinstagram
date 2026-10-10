@@ -1,6 +1,7 @@
 """
 Usage: python -m app.scripts.create_admin --email admin@example.com --password secret123
 """
+
 import argparse
 import asyncio
 
@@ -20,7 +21,13 @@ async def _create(email: str, password: str) -> None:
             user.password_hash = hash_password(password)
             print(f"Updated existing user {email} to admin.")
         else:
-            user = User(email=email, password_hash=hash_password(password), name="Admin", role="admin", email_verified=True)
+            user = User(
+                email=email,
+                password_hash=hash_password(password),
+                name="Admin",
+                role="admin",
+                email_verified=True,
+            )
             db.add(user)
             print(f"Created admin user {email}.")
         await db.commit()

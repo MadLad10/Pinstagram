@@ -1,8 +1,6 @@
-import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Enum, String, Text
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
@@ -28,7 +26,13 @@ class User(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    premium_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    premium_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    banned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    banned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

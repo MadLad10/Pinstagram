@@ -1,109 +1,725 @@
 """
 Usage: python -m app.scripts.seed_dev
-Seeds demo places, bus routes, transport fares, and a demo user.
+
+Seeds a realistic local dataset: Dhaka places, bus stops/routes along the main
+corridors, rail stations and timetables, ride-hail fares, demo users with posts,
+likes, comments, follows and reviews. Idempotent: rows are matched by natural
+keys (email, name), so re-running only fills in what's missing.
+
+Landmarks are real public places with approximate coordinates; cafes,
+restaurants and hotels are fictional so no real business gets fake reviews.
+Images are placeholders from picsum.photos.
 """
+
 import asyncio
-import uuid
-from datetime import datetime, timezone
+import random
+from datetime import UTC, datetime, time, timedelta
 
 from geoalchemy2.elements import WKTElement
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.core.security import hash_password
 from app.db.session import AsyncSessionLocal
 from app.models.place import Place
-from app.models.transport import BusStop, BusRoute, TransportFare
+from app.models.post import Post, PostComment, PostLike
+from app.models.review import Review
+from app.models.social import Follow, SavedPlace
+from app.models.transport import (
+    BusRoute,
+    BusStop,
+    TrainSchedule,
+    TrainStation,
+    TransportFare,
+)
 from app.models.user import User
+from app.services.reviews_service import recompute_place_rating
 from app.services.uploads_service import ensure_bucket_exists
 
+rng = random.Random(42)  # deterministic demo data
+
+
+def img(seed: str, size: int = 1080) -> str:
+    return f"https://picsum.photos/seed/{seed}/{size}/{size}"
+
+
+def pt(lat: float, lng: float) -> WKTElement:
+    return WKTElement(f"POINT({lng} {lat})", srid=4326)
+
+
+# (name, category, area, lat, lng, price_tier, amenities, description)
 PLACES = [
-    {"name": "Cafe Mango", "category": "cafe", "address": "Road 11, Banani, Dhaka", "division": "Dhaka", "district": "Dhaka", "area": "Banani", "lat": 23.7937, "lng": 90.4066, "price_tier": "mid", "avg_rating": 4.2, "amenities": ["ac", "wifi"], "is_verified": True},
-    {"name": "Star Kabab & Restaurant", "category": "restaurant", "address": "Dhanmondi 27, Dhaka", "division": "Dhaka", "district": "Dhaka", "area": "Dhanmondi", "lat": 23.7461, "lng": 90.3742, "price_tier": "budget", "avg_rating": 4.5, "amenities": ["ac"], "is_verified": True},
-    {"name": "Pan Pacific Sonargaon", "category": "hotel", "address": "107 Kazi Nazrul Islam Ave, Dhaka", "division": "Dhaka", "district": "Dhaka", "area": "Karwan Bazar", "lat": 23.7519, "lng": 90.3929, "price_tier": "luxury", "avg_rating": 4.7, "amenities": ["parking", "ac", "wifi", "outdoor_seating"], "is_verified": True},
-    {"name": "Hatirjheel Lake", "category": "scenic", "address": "Hatirjheel, Dhaka", "division": "Dhaka", "district": "Dhaka", "area": "Hatirjheel", "lat": 23.7712, "lng": 90.4083, "price_tier": "budget", "avg_rating": 4.3, "amenities": [], "is_verified": True},
-    {"name": "Lalbagh Fort", "category": "historical", "address": "Lalbagh, Old Dhaka", "division": "Dhaka", "district": "Dhaka", "area": "Lalbagh", "lat": 23.7196, "lng": 90.3885, "price_tier": "budget", "avg_rating": 4.4, "amenities": ["parking"], "is_verified": True},
-    {"name": "Skybar Gulshan", "category": "aesthetic", "address": "Gulshan 2, Dhaka", "division": "Dhaka", "district": "Dhaka", "area": "Gulshan", "lat": 23.7936, "lng": 90.4154, "price_tier": "luxury", "avg_rating": 4.6, "amenities": ["ac", "wifi"], "is_verified": True},
-    {"name": "Chillox", "category": "restaurant", "address": "Bashundhara City, Dhaka", "division": "Dhaka", "district": "Dhaka", "area": "Panthapath", "lat": 23.7514, "lng": 90.3861, "price_tier": "mid", "avg_rating": 4.1, "amenities": ["ac"], "is_verified": True},
-    {"name": "Dhaka Regency Hotel", "category": "hotel", "address": "Airport Road, Dhaka", "division": "Dhaka", "district": "Dhaka", "area": "Nikunja", "lat": 23.8230, "lng": 90.4005, "price_tier": "luxury", "avg_rating": 4.3, "amenities": ["parking", "ac", "wifi"], "is_verified": True},
-    {"name": "Mezbaan Restaurant", "category": "restaurant", "address": "Mirpur 10, Dhaka", "division": "Dhaka", "district": "Dhaka", "area": "Mirpur", "lat": 23.8055, "lng": 90.3666, "price_tier": "budget", "avg_rating": 4.0, "amenities": ["ac"], "is_verified": True},
-    {"name": "Café Kawa", "category": "cafe", "address": "Uttara Sector 7, Dhaka", "division": "Dhaka", "district": "Dhaka", "area": "Uttara", "lat": 23.8759, "lng": 90.3795, "price_tier": "mid", "avg_rating": 4.4, "amenities": ["ac", "wifi"], "is_verified": True},
+    (
+        "Lalbagh Fort",
+        "historical",
+        "Lalbagh",
+        23.7190,
+        90.3882,
+        "budget",
+        ["parking"],
+        "Unfinished 17th-century Mughal fort complex with gardens, a mosque and the tomb of Pari Bibi.",
+    ),
+    (
+        "Ahsan Manzil",
+        "historical",
+        "Kumartuli",
+        23.7086,
+        90.4060,
+        "budget",
+        [],
+        "The Pink Palace on the Buriganga, former seat of the Dhaka Nawabs, now a museum.",
+    ),
+    (
+        "Star Mosque",
+        "historical",
+        "Armanitola",
+        23.7158,
+        90.4006,
+        "budget",
+        [],
+        "18th-century mosque covered in blue star mosaics made from Japanese and English china.",
+    ),
+    (
+        "Dhakeshwari Temple",
+        "historical",
+        "Palashi",
+        23.7231,
+        90.3867,
+        "budget",
+        [],
+        "The national temple of Bangladesh, said to date back to the 12th century.",
+    ),
+    (
+        "National Parliament House",
+        "aesthetic",
+        "Sher-e-Bangla Nagar",
+        23.7625,
+        90.3785,
+        "budget",
+        ["parking"],
+        "Louis Kahn's concrete masterpiece. Best photographed at golden hour from Crescent Lake.",
+    ),
+    (
+        "Hatirjheel Lake",
+        "scenic",
+        "Hatirjheel",
+        23.7712,
+        90.4083,
+        "budget",
+        [],
+        "Lakefront promenade with bridges, water taxis and evening light shows.",
+    ),
+    (
+        "Dhanmondi Lake",
+        "scenic",
+        "Dhanmondi",
+        23.7465,
+        90.3775,
+        "budget",
+        ["outdoor_seating"],
+        "Tree-lined lake walk with food stalls, paddle boats and Rabindra Sarobar.",
+    ),
+    (
+        "Ramna Park",
+        "scenic",
+        "Ramna",
+        23.7380,
+        90.4010,
+        "budget",
+        [],
+        "The oldest park in Dhaka; the centre of Pohela Boishakh celebrations.",
+    ),
+    (
+        "National Botanical Garden",
+        "scenic",
+        "Mirpur",
+        23.8160,
+        90.3460,
+        "budget",
+        ["parking"],
+        "84 hectares of greenhouses, lotus ponds and over 1,000 plant species.",
+    ),
+    (
+        "Gulshan Lake Park",
+        "scenic",
+        "Gulshan",
+        23.7980,
+        90.4180,
+        "budget",
+        ["outdoor_seating"],
+        "Quiet lakeside park popular for morning jogs and evening walks.",
+    ),
+    (
+        "Cafe Mango",
+        "cafe",
+        "Banani",
+        23.7937,
+        90.4066,
+        "mid",
+        ["ac", "wifi"],
+        "Bright corner cafe known for mango cold brew and a sunny window bar.",
+    ),
+    (
+        "Banani Book Cafe",
+        "cafe",
+        "Banani",
+        23.7920,
+        90.4040,
+        "mid",
+        ["ac", "wifi"],
+        "Second-hand books, board games and a strong cardamom latte.",
+    ),
+    (
+        "Uttara Bean Co.",
+        "cafe",
+        "Uttara",
+        23.8759,
+        90.3795,
+        "mid",
+        ["ac", "wifi", "parking"],
+        "Specialty coffee roastery with single-origin pour-overs.",
+    ),
+    (
+        "Tong Tea Corner",
+        "cafe",
+        "Karwan Bazar",
+        23.7515,
+        90.3925,
+        "budget",
+        ["outdoor_seating"],
+        "Classic street-side tea stall: malai cha, singara and adda till late.",
+    ),
+    (
+        "Kacchi Ghor",
+        "restaurant",
+        "Dhanmondi",
+        23.7461,
+        90.3742,
+        "budget",
+        ["ac"],
+        "Slow-cooked mutton kacchi biryani served from giant handi pots.",
+    ),
+    (
+        "Old Dhaka Biryani House",
+        "restaurant",
+        "Nazira Bazar",
+        23.7203,
+        90.4030,
+        "budget",
+        [],
+        "Narrow lane institution for haji-style biryani and borhani.",
+    ),
+    (
+        "Mezban Bari",
+        "restaurant",
+        "Mirpur",
+        23.8055,
+        90.3666,
+        "budget",
+        ["ac"],
+        "Chittagonian mezban beef and kala bhuna, family-style.",
+    ),
+    (
+        "Lakeview Rooftop",
+        "aesthetic",
+        "Gulshan",
+        23.7936,
+        90.4154,
+        "luxury",
+        ["ac", "wifi", "outdoor_seating"],
+        "Rooftop lounge over Gulshan Lake with sunset views and mocktails.",
+    ),
+    (
+        "Hotel Shapla Grand",
+        "hotel",
+        "Karwan Bazar",
+        23.7519,
+        90.3929,
+        "luxury",
+        ["parking", "ac", "wifi"],
+        "Business hotel with a pool, five minutes from Karwan Bazar metro.",
+    ),
+    (
+        "Airport Garden Inn",
+        "hotel",
+        "Nikunja",
+        23.8230,
+        90.4170,
+        "mid",
+        ["parking", "ac", "wifi"],
+        "Comfortable stopover hotel with free airport shuttle.",
+    ),
 ]
 
-BUS_STOPS_DATA = [
-    {"name": "Mohakhali Bus Stand", "lat": 23.7771, "lng": 90.4040, "division": "Dhaka", "district": "Dhaka"},
-    {"name": "Banani Stop", "lat": 23.7937, "lng": 90.4022, "division": "Dhaka", "district": "Dhaka"},
-    {"name": "Gulshan 1 Stop", "lat": 23.7808, "lng": 90.4146, "division": "Dhaka", "district": "Dhaka"},
-    {"name": "Karwan Bazar Stop", "lat": 23.7519, "lng": 90.3929, "division": "Dhaka", "district": "Dhaka"},
-    {"name": "Farmgate Stop", "lat": 23.7580, "lng": 90.3876, "division": "Dhaka", "district": "Dhaka"},
+BUS_STOPS = {
+    "Abdullahpur": (23.8794, 90.4006),
+    "House Building": (23.8737, 90.4004),
+    "Airport": (23.8513, 90.4086),
+    "Khilkhet": (23.8296, 90.4196),
+    "Kuril Bishwa Road": (23.8167, 90.4210),
+    "Banani": (23.7946, 90.4019),
+    "Mohakhali": (23.7781, 90.3982),
+    "Jahangir Gate": (23.7746, 90.3906),
+    "Bijoy Sarani": (23.7656, 90.3889),
+    "Farmgate": (23.7577, 90.3897),
+    "Karwan Bazar": (23.7509, 90.3934),
+    "Bangla Motor": (23.7466, 90.3951),
+    "Shahbag": (23.7385, 90.3960),
+    "Press Club": (23.7297, 90.4049),
+    "Gulistan": (23.7234, 90.4113),
+    "Mirpur 10": (23.8069, 90.3687),
+    "Mirpur 1": (23.7957, 90.3537),
+    "Shyamoli": (23.7743, 90.3653),
+    "Asad Gate": (23.7600, 90.3735),
+    "Dhanmondi 27": (23.7563, 90.3745),
+    "Science Lab": (23.7390, 90.3830),
+    "Nilkhet": (23.7330, 90.3858),
+    "Azimpur": (23.7270, 90.3864),
+    "Lalbagh Chowrasta": (23.7184, 90.3870),
+    "Gulshan 1": (23.7808, 90.4167),
+    "Gulshan 2": (23.7925, 90.4148),
+    "Notun Bazar": (23.7980, 90.4237),
+    "Badda": (23.7807, 90.4260),
+    "Rampura": (23.7612, 90.4210),
+    "Malibagh": (23.7495, 90.4130),
+    "Moghbazar": (23.7490, 90.4035),
+    "Police Plaza": (23.7742, 90.4127),
+    "Agargaon": (23.7779, 90.3800),
+}
+
+# (name, operator, fare, minutes, stops in order)
+BUS_ROUTES = [
+    (
+        "Airport Road Express",
+        "BRTC",
+        60,
+        95,
+        [
+            "Abdullahpur",
+            "House Building",
+            "Airport",
+            "Khilkhet",
+            "Kuril Bishwa Road",
+            "Banani",
+            "Mohakhali",
+            "Jahangir Gate",
+            "Bijoy Sarani",
+            "Farmgate",
+            "Karwan Bazar",
+            "Bangla Motor",
+            "Shahbag",
+            "Press Club",
+            "Gulistan",
+        ],
+    ),
+    (
+        "Mirpur Road Link",
+        "Bikolpo",
+        35,
+        65,
+        [
+            "Mirpur 10",
+            "Mirpur 1",
+            "Shyamoli",
+            "Asad Gate",
+            "Dhanmondi 27",
+            "Science Lab",
+            "Nilkhet",
+            "Azimpur",
+            "Lalbagh Chowrasta",
+        ],
+    ),
+    (
+        "Mirpur–Motijheel",
+        "Shikhor",
+        40,
+        70,
+        [
+            "Mirpur 10",
+            "Agargaon",
+            "Bijoy Sarani",
+            "Farmgate",
+            "Karwan Bazar",
+            "Shahbag",
+            "Press Club",
+            "Gulistan",
+        ],
+    ),
+    (
+        "Gulshan Chaka",
+        "Dhaka Chaka",
+        20,
+        25,
+        ["Gulshan 1", "Gulshan 2", "Notun Bazar", "Banani"],
+    ),
+    (
+        "Progoti Sarani Line",
+        "Turag",
+        45,
+        70,
+        [
+            "Abdullahpur",
+            "Kuril Bishwa Road",
+            "Notun Bazar",
+            "Badda",
+            "Rampura",
+            "Malibagh",
+            "Moghbazar",
+            "Bangla Motor",
+        ],
+    ),
+    (
+        "Hatirjheel Circular",
+        "Hatirjheel Transit",
+        25,
+        30,
+        [
+            "Police Plaza",
+            "Gulshan 1",
+            "Mohakhali",
+            "Moghbazar",
+            "Rampura",
+            "Police Plaza",
+        ],
+    ),
+]
+
+TRAIN_STATIONS = {
+    "Kamalapur": (23.7322, 90.4260),
+    "Tejgaon": (23.7621, 90.3955),
+    "Banani Rail Station": (23.7953, 90.4060),
+    "Dhaka Airport Station": (23.8510, 90.4080),
+}
+
+# (from, to, departures, minutes, fare)
+TRAIN_SCHEDULES = [
+    (
+        "Kamalapur",
+        "Dhaka Airport Station",
+        ["06:40", "09:15", "13:00", "17:30", "21:10"],
+        35,
+        45,
+    ),
+    (
+        "Dhaka Airport Station",
+        "Kamalapur",
+        ["07:50", "10:30", "14:20", "18:45", "22:15"],
+        35,
+        45,
+    ),
+    ("Tejgaon", "Dhaka Airport Station", ["06:52", "09:27", "13:12", "17:42"], 22, 30),
+    ("Dhaka Airport Station", "Tejgaon", ["08:15", "10:55", "14:45", "19:10"], 22, 30),
+    ("Kamalapur", "Banani Rail Station", ["06:40", "13:00", "17:30"], 25, 30),
+    ("Banani Rail Station", "Kamalapur", ["08:05", "14:35", "19:00"], 25, 30),
+]
+
+FARES = [("uber", 50, 18, 2), ("pathao", 40, 16, 2), ("obhai", 35, 14, 2)]
+
+USERS = [
+    (
+        "demo@pinstagram.app",
+        "Demo User",
+        "Exploring Dhaka one cup of cha at a time.",
+        "user",
+    ),
+    (
+        "nadia@pinstagram.app",
+        "Nadia Rahman",
+        "Food photographer. Kacchi critic.",
+        "creator",
+    ),
+    ("arif@pinstagram.app", "Arif Hossain", "Heritage walks around Old Dhaka.", "user"),
+    ("tania@pinstagram.app", "Tania Akter", "Cafe hopper | Banani & Gulshan", "user"),
+    ("rafi@pinstagram.app", "Rafi Chowdhury", "Weekend cyclist, lake chaser.", "user"),
+    ("admin@pinstagram.app", "Pinstagram Admin", None, "admin"),
+]
+DEMO_PASSWORD = "demo1234"
+
+CAPTIONS = {
+    "historical": [
+        ("Golden hour at the fort walls", ["heritage", "olddhaka"]),
+        ("Every arch tells a story", ["architecture", "history"]),
+        ("Worth the early start before the crowds", ["weekend", "heritage"]),
+    ],
+    "scenic": [
+        ("Evening breeze by the water", ["sunset", "dhaka"]),
+        ("Found my new morning walk spot", ["green", "weekend"]),
+        ("Monsoon skies over the lake", ["monsoon", "lake"]),
+    ],
+    "cafe": [
+        ("Best cold brew in the area, no contest", ["coffee", "cafehopping"]),
+        ("Rainy day, warm latte", ["coffee", "monsoon"]),
+        ("Work-from-cafe Wednesday", ["wfh", "coffee"]),
+    ],
+    "restaurant": [
+        ("The kacchi here is unreal", ["kacchi", "foodie"]),
+        ("Came for lunch, stayed for dessert", ["foodie", "dhakafood"]),
+        ("Borhani + biryani = perfect Friday", ["biryani", "foodie"]),
+    ],
+    "aesthetic": [
+        ("Concrete and light", ["architecture", "aesthetic"]),
+        ("Views for days", ["sunset", "rooftop"]),
+    ],
+    "hotel": [
+        ("Staycation mode on", ["staycation", "pool"]),
+        ("Breakfast spread was huge", ["hotel", "breakfast"]),
+    ],
+}
+
+REVIEW_BODIES = [
+    "Went on a weekday afternoon and it was calm and clean. Staff were friendly and helpful, would come back.",
+    "Busy on Friday evening, so come early. The atmosphere makes up for the wait and prices are fair.",
+    "Lovely spot for photos, especially around sunset. Parking is a hassle so take a rickshaw from the main road.",
+    "Decent overall. A few things could be better maintained but it is still worth a visit if you are nearby.",
+    "One of my favourite places in Dhaka. Great for taking visiting friends and family, never disappoints.",
 ]
 
 
 async def seed() -> None:
-    ensure_bucket_exists()
+    if settings.ENV == "production":
+        raise SystemExit("Refusing to seed demo data into production.")
+    try:
+        ensure_bucket_exists()
+    except Exception as exc:  # storage is optional for browsing seeded data
+        print(f"  (skipping bucket setup: {exc})")
 
+    now = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.email == "demo@pinstagram.app"))
-        if not result.scalar_one_or_none():
-            user = User(
-                email="demo@pinstagram.app",
-                password_hash=hash_password("demo1234"),
-                name="Demo User",
-                role="user",
-                email_verified=True,
-            )
-            db.add(user)
-            print("Created demo user: demo@pinstagram.app / demo1234")
+        users: dict[str, User] = {}
+        for email, name, bio, role in USERS:
+            user = (
+                await db.execute(select(User).where(User.email == email))
+            ).scalar_one_or_none()
+            if not user:
+                user = User(
+                    email=email,
+                    password_hash=hash_password(
+                        DEMO_PASSWORD if role != "admin" else "admin1234"
+                    ),
+                    name=name,
+                    bio=bio,
+                    role=role,
+                    location="Dhaka",
+                    email_verified=True,
+                    is_verified=role == "creator",
+                    avatar_url=img(f"avatar-{email}", 256) if role != "admin" else None,
+                )
+                db.add(user)
+                print(f"  user  {email}")
+            users[email] = user
+        await db.flush()
 
-        for p in PLACES:
-            result = await db.execute(select(Place).where(Place.name == p["name"]))
-            if not result.scalar_one_or_none():
+        places: dict[str, Place] = {}
+        for name, cat, area, lat, lng, tier, amenities, desc in PLACES:
+            place = (
+                await db.execute(select(Place).where(Place.name == name))
+            ).scalar_one_or_none()
+            if not place:
                 place = Place(
-                    name=p["name"],
-                    category=p["category"],
-                    address=p["address"],
-                    division=p["division"],
-                    district=p["district"],
-                    area=p["area"],
-                    location=WKTElement(f"POINT({p['lng']} {p['lat']})", srid=4326),
-                    price_tier=p["price_tier"],
-                    avg_rating=p["avg_rating"],
-                    amenities=p.get("amenities", []),
-                    is_verified=p["is_verified"],
+                    name=name,
+                    category=cat,
+                    description=desc,
+                    address=f"{area}, Dhaka",
+                    division="Dhaka",
+                    district="Dhaka",
+                    area=area,
+                    location=pt(lat, lng),
+                    price_tier=tier,
+                    amenities=amenities,
+                    cover_photo_url=img(name.lower().replace(" ", "-")),
+                    is_verified=True,
+                    is_featured=cat in ("historical", "scenic") and rng.random() < 0.4,
                 )
                 db.add(place)
-                print(f"  Added place: {p['name']}")
+                print(f"  place {name}")
+            places[name] = place
+        await db.flush()
 
-        stop_ids = []
-        for s in BUS_STOPS_DATA:
-            result = await db.execute(select(BusStop).where(BusStop.name == s["name"]))
-            existing = result.scalar_one_or_none()
-            if not existing:
-                stop = BusStop(name=s["name"], location=WKTElement(f"POINT({s['lng']} {s['lat']})", srid=4326),
-                               division=s["division"], district=s["district"])
+        stops: dict[str, BusStop] = {}
+        for name, (lat, lng) in BUS_STOPS.items():
+            stop = (
+                await db.execute(select(BusStop).where(BusStop.name == name))
+            ).scalar_one_or_none()
+            if not stop:
+                stop = BusStop(
+                    name=name, location=pt(lat, lng), division="Dhaka", district="Dhaka"
+                )
                 db.add(stop)
-                await db.flush()
-                stop_ids.append(stop.id)
-                print(f"  Added bus stop: {s['name']}")
-            else:
-                stop_ids.append(existing.id)
+            stops[name] = stop
+        await db.flush()
 
-        if stop_ids and len(stop_ids) >= 2:
-            result = await db.execute(select(BusRoute).where(BusRoute.name == "Route 6"))
-            if not result.scalar_one_or_none():
-                route = BusRoute(name="Route 6", operator="BRTC", stops=stop_ids,
-                                 typical_fare=40, typical_duration_min=25)
-                db.add(route)
-                print("  Added bus route: Route 6")
+        for name, operator, fare, minutes, stop_names in BUS_ROUTES:
+            if not (
+                await db.execute(select(BusRoute).where(BusRoute.name == name))
+            ).scalar_one_or_none():
+                db.add(
+                    BusRoute(
+                        name=name,
+                        operator=operator,
+                        stops=[str(stops[s].id) for s in stop_names],
+                        typical_fare=fare,
+                        typical_duration_min=minutes,
+                    )
+                )
+                print(f"  bus   {name}")
 
-        for provider, base, per_km, per_min in [("uber", 50, 18, 2), ("pathao", 40, 16, 2), ("obhai", 35, 14, 2)]:
-            result = await db.execute(select(TransportFare).where(TransportFare.provider == provider))
-            if not result.scalar_one_or_none():
-                fare = TransportFare(provider=provider, base_fare=base, per_km=per_km, per_min=per_min)
-                db.add(fare)
-                print(f"  Added fare: {provider}")
+        stations: dict[str, TrainStation] = {}
+        for name, (lat, lng) in TRAIN_STATIONS.items():
+            st = (
+                await db.execute(select(TrainStation).where(TrainStation.name == name))
+            ).scalar_one_or_none()
+            if not st:
+                st = TrainStation(name=name, location=pt(lat, lng), division="Dhaka")
+                db.add(st)
+            stations[name] = st
+        await db.flush()
+
+        if not (await db.execute(select(TrainSchedule).limit(1))).scalar_one_or_none():
+            for frm, to, departures, minutes, fare in TRAIN_SCHEDULES:
+                for dep in departures:
+                    h, m = map(int, dep.split(":"))
+                    db.add(
+                        TrainSchedule(
+                            from_station_id=stations[frm].id,
+                            to_station_id=stations[to].id,
+                            departure_time=time(h, m),
+                            duration_min=minutes,
+                            fare=fare,
+                            days_of_week=[1, 2, 3, 4, 5, 6, 7],
+                        )
+                    )
+            print("  train schedules")
+
+        for provider, base, per_km, per_min in FARES:
+            if not (
+                await db.execute(
+                    select(TransportFare).where(TransportFare.provider == provider)
+                )
+            ).scalar_one_or_none():
+                db.add(
+                    TransportFare(
+                        provider=provider,
+                        base_fare=base,
+                        per_km=per_km,
+                        per_min=per_min,
+                    )
+                )
+
+        # Social graph and content only on first run.
+        if (await db.execute(select(Post).limit(1))).scalar_one_or_none() is None:
+            people = [u for e, u in users.items() if u.role != "admin"]
+            for a in people:
+                for b in people:
+                    if a is not b and rng.random() < 0.6:
+                        db.add(
+                            Follow(
+                                follower_id=a.id,
+                                followee_id=b.id,
+                                created_at=now - timedelta(days=rng.randint(5, 60)),
+                            )
+                        )
+
+            posts: list[Post] = []
+            for i, place in enumerate(places.values()):
+                for j in range(rng.randint(1, 3)):
+                    author = rng.choice(people)
+                    caption, tags = rng.choice(CAPTIONS[place.category])
+                    created = now - timedelta(hours=rng.randint(1, 24 * 20))
+                    post = Post(
+                        user_id=author.id,
+                        place_id=place.id,
+                        media_url=img(f"post-{i}-{j}"),
+                        media_type="image",
+                        caption=caption,
+                        hashtags=tags,
+                        price_mentioned=rng.choice([None, 120, 250, 450])
+                        if place.category in ("cafe", "restaurant")
+                        else None,
+                        rating=rng.randint(4, 5),
+                        status="published",
+                        created_at=created,
+                        updated_at=created,
+                    )
+                    db.add(post)
+                    posts.append(post)
+            # One post waiting in the moderation queue for the admin demo.
+            db.add(
+                Post(
+                    user_id=users["tania@pinstagram.app"].id,
+                    place_id=places["Cafe Mango"].id,
+                    media_url=img("pending-1"),
+                    media_type="image",
+                    caption="New seasonal menu!",
+                    hashtags=["coffee"],
+                    status="pending",
+                )
+            )
+            await db.flush()
+
+            for post in posts:
+                likers = rng.sample(people, rng.randint(0, len(people)))
+                for u in likers:
+                    db.add(
+                        PostLike(
+                            user_id=u.id,
+                            post_id=post.id,
+                            created_at=post.created_at + timedelta(hours=1),
+                        )
+                    )
+                post.like_count = len(likers)
+                commenters = rng.sample(people, rng.randint(0, 2))
+                for u in commenters:
+                    db.add(
+                        PostComment(
+                            post_id=post.id,
+                            user_id=u.id,
+                            body=rng.choice(
+                                [
+                                    "Adding this to my list!",
+                                    "Love this spot",
+                                    "How was the crowd?",
+                                    "Beautiful shot",
+                                ]
+                            ),
+                            created_at=post.created_at + timedelta(hours=2),
+                        )
+                    )
+                post.comment_count = len(commenters)
+
+            for place in places.values():
+                for u in rng.sample(people, rng.randint(2, 4)):
+                    db.add(
+                        Review(
+                            user_id=u.id,
+                            place_id=place.id,
+                            rating=rng.choice([3, 4, 4, 5, 5]),
+                            body=rng.choice(REVIEW_BODIES),
+                            status="published",
+                            price_paid=rng.choice([None, 200, 500])
+                            if place.category in ("cafe", "restaurant")
+                            else None,
+                        )
+                    )
+            await db.flush()
+            for place in places.values():
+                await recompute_place_rating(db, place.id)
+
+            demo = users["demo@pinstagram.app"]
+            for name in ("Lalbagh Fort", "Cafe Mango", "Hatirjheel Lake"):
+                db.add(
+                    SavedPlace(
+                        user_id=demo.id, place_id=places[name].id, created_at=now
+                    )
+                )
+                places[name].save_count += 1
+            print(f"  {len(posts)} posts, likes, comments, reviews")
 
         await db.commit()
-        print("\nSeed complete.")
+
+    print(
+        f"\nSeed complete. Log in as demo@pinstagram.app / {DEMO_PASSWORD} "
+        "(admin: admin@pinstagram.app / admin1234)"
+    )
 
 
 if __name__ == "__main__":

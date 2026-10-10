@@ -1,35 +1,19 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field
 
 
 class ReviewCreate(BaseModel):
-    rating: int
-    body: str
-    price_paid: int | None = None
-
-    @field_validator("rating")
-    @classmethod
-    def rating_range(cls, v: int) -> int:
-        if v < 1 or v > 5:
-            raise ValueError("Rating must be between 1 and 5")
-        return v
-
-    @field_validator("body")
-    @classmethod
-    def body_length(cls, v: str) -> str:
-        if len(v) < 50:
-            raise ValueError("Review body must be at least 50 characters")
-        if len(v) > 2000:
-            raise ValueError("Review body must not exceed 2000 characters")
-        return v
+    rating: int = Field(ge=1, le=5)
+    body: str = Field(min_length=50, max_length=2000)
+    price_paid: int | None = Field(None, ge=0)
 
 
 class ReviewUpdate(BaseModel):
-    rating: int | None = None
-    body: str | None = None
-    price_paid: int | None = None
+    rating: int | None = Field(None, ge=1, le=5)
+    body: str | None = Field(None, min_length=50, max_length=2000)
+    price_paid: int | None = Field(None, ge=0)
 
 
 class ReviewRead(BaseModel):

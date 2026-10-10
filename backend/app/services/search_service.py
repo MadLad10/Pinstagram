@@ -1,60 +1,98 @@
+"""Unified search across places, users, hashtags and posts.
+
+Places use the generated `search_vector` column (GIN-indexed) with prefix
+matching, so "cafe ban" finds "Cafe Mango, Banani". A pg_trgm similarity
+fallback catches typos ("lalbag" -> "Lalbagh Fort").
+"""
+
+import re
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.places_service import prefix_tsquery
 
-async def search(db: AsyncSession, q: str, search_type: str, cursor: str | None, limit: int) -> dict:
-    if len(q) < 2:
-        return {"places": [], "users": [], "hashtags": [], "posts": []}
 
+async def search(db: AsyncSession, q: str, search_type: str, limit: int) -> dict:
+    q = q.strip()
     results: dict = {}
+    tsq = prefix_tsquery(q)
+    if not tsq:
+        return {"places": [], "users": [], "hashtags": [], "posts": []}
+    is_all = search_type == "all"
 
     if search_type in ("places", "all"):
-        place_rows = await db.execute(text(f"""
-            SELECT id, name, category, cover_photo_url, avg_rating, price_tier, area, district, is_verified
+        rows = await db.execute(
+            text("""
+            SELECT id, name, category, cover_photo_url, avg_rating, price_tier,
+                   area, district, is_verified,
+                   ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng,
+                   ts_rank(search_vector, to_tsquery('simple', :tsq)) AS rank,
+                   similarity(name, :q) AS sim
             FROM places
-            WHERE is_verified = true
-              AND (name ILIKE :q OR area ILIKE :q OR district ILIKE :q)
-            ORDER BY
-              CASE WHEN name ILIKE :exact THEN 0
-                   WHEN name ILIKE :starts THEN 1
-                   ELSE 2 END,
-              avg_rating DESC
+            WHERE is_verified
+              AND (search_vector @@ to_tsquery('simple', :tsq) OR similarity(name, :q) > 0.3)
+            ORDER BY rank DESC, sim DESC, avg_rating DESC
             LIMIT :limit
-        """), {"q": f"%{q}%", "exact": q, "starts": f"{q}%", "limit": 5 if search_type == "all" else limit})
-        results["places"] = [dict(r) for r in place_rows.mappings()]
+            """),
+            {"tsq": tsq, "q": q, "limit": 5 if is_all else limit},
+        )
+        results["places"] = [
+            {k: v for k, v in r.items() if k not in ("rank", "sim")}
+            | {"avg_rating": float(r["avg_rating"])}
+            for r in rows.mappings()
+        ]
 
     if search_type in ("users", "all"):
-        user_rows = await db.execute(text("""
+        rows = await db.execute(
+            text("""
             SELECT id, name, avatar_url, bio, is_verified
             FROM users
-            WHERE deleted_at IS NULL AND name ILIKE :q
+            WHERE deleted_at IS NULL AND banned_at IS NULL
+              AND (name ILIKE :prefix OR similarity(name, :q) > 0.3)
+            ORDER BY similarity(name, :q) DESC
             LIMIT :limit
-        """), {"q": f"%{q}%", "limit": 3 if search_type == "all" else limit})
-        results["users"] = [dict(r) for r in user_rows.mappings()]
+            """),
+            {"prefix": f"{_escape_like(q)}%", "q": q, "limit": 3 if is_all else limit},
+        )
+        results["users"] = [dict(r) for r in rows.mappings()]
 
     if search_type in ("hashtags", "all"):
-        hashtag_rows = await db.execute(text("""
-            SELECT DISTINCT unnest(hashtags) as tag
-            FROM posts
-            WHERE status = 'published'
-              AND EXISTS (SELECT 1 FROM unnest(hashtags) h WHERE h ILIKE :q)
+        tag = re.sub(r"\W", "", q.lstrip("#").lower())
+        rows = await db.execute(
+            text("""
+            SELECT tag, count(*) AS uses
+            FROM posts, unnest(hashtags) AS tag
+            WHERE status = 'published' AND tag LIKE :prefix
+            GROUP BY tag
+            ORDER BY uses DESC
             LIMIT :limit
-        """), {"q": f"{q}%", "limit": 5 if search_type == "all" else limit})
-        results["hashtags"] = [r["tag"] for r in hashtag_rows.mappings()]
+            """),
+            {"prefix": f"{tag}%", "limit": 5 if is_all else limit},
+        )
+        results["hashtags"] = [r["tag"] for r in rows.mappings()] if tag else []
 
     if search_type in ("posts", "all"):
-        post_rows = await db.execute(text("""
+        tag = re.sub(r"\W", "", q.lstrip("#").lower())
+        rows = await db.execute(
+            text("""
             SELECT p.id, p.media_url, p.media_type, p.thumbnail_url, p.caption,
                    p.like_count, p.created_at,
-                   u.name as author_name, pl.name as place_name
+                   u.name AS author_name, pl.id AS place_id, pl.name AS place_name
             FROM posts p
             JOIN users u ON u.id = p.user_id
             JOIN places pl ON pl.id = p.place_id
             WHERE p.status = 'published' AND u.deleted_at IS NULL
-              AND (p.caption ILIKE :q OR EXISTS (SELECT 1 FROM unnest(p.hashtags) h WHERE h ILIKE :q))
-            ORDER BY p.like_count DESC
+              AND (p.search_vector @@ to_tsquery('simple', :tsq) OR p.hashtags @> ARRAY[:tag]::varchar[])
+            ORDER BY p.like_count DESC, p.created_at DESC
             LIMIT :limit
-        """), {"q": f"%{q}%", "limit": 10 if search_type == "all" else limit})
-        results["posts"] = [dict(r) for r in post_rows.mappings()]
+            """),
+            {"tsq": tsq, "tag": tag, "limit": 10 if is_all else limit},
+        )
+        results["posts"] = [dict(r) for r in rows.mappings()]
 
     return results
+
+
+def _escape_like(s: str) -> str:
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
