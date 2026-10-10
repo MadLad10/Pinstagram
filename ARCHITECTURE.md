@@ -106,6 +106,6 @@ Keep simple. FastAPI `BackgroundTasks` for fire-and-forget (sending email verifi
 
 ## Environments
 
-- `local` — Docker Compose: Postgres + Redis + MinIO (S3-compatible)
+- `local` — Docker Compose: Postgres + Redis + SeaweedFS (S3-compatible)
 - `staging` — single VPS, same stack
 - `production` — TBD (Render / Railway / AWS — decide later)

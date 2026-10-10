@@ -212,6 +212,34 @@ For ride-hail estimation.
 | resolved_by | UUID | FK users.id, nullable |
 | created_at | TIMESTAMPTZ | |
 
+### `admin_actions`
+
+Audit log. Written in the same transaction as the action it records.
+
+| column | type | notes |
+|---|---|---|
+| id | UUID | PK |
+| admin_id | UUID | FK users.id |
+| action | TEXT | e.g. `approve_post`, `ban_user`, `import_bus_routes` |
+| target_type / target_id | TEXT / UUID | nullable |
+| metadata | JSONB | nullable |
+| created_at | TIMESTAMPTZ | |
+
+### `notifications`
+
+| column | type | notes |
+|---|---|---|
+| id | UUID | PK |
+| user_id | UUID | FK users.id, recipient |
+| actor_id | UUID | FK users.id, nullable (system notifications) |
+| type | ENUM | `'like' \| 'comment' \| 'follow' \| 'post_approved' \| 'post_rejected' \| 'review_approved'` |
+| post_id / place_id | UUID | nullable |
+| message | TEXT | nullable |
+| read_at | TIMESTAMPTZ | nullable |
+| created_at | TIMESTAMPTZ | |
+
+Index: `(user_id, created_at)`.
+
 ### `blocks`
 
 | column | type | notes |

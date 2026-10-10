@@ -22,13 +22,14 @@ cp mobile/.env.example mobile/.env
 ## Step 2 — Bring up services
 
 ```bash
-docker compose up -d postgres redis minio
+docker compose up -d postgres redis s3
 ```
 
 This starts:
 - Postgres on `localhost:5432` (user: `app`, db: `bdvisual`)
 - Redis on `localhost:6379`
-- MinIO (S3-compatible) on `localhost:9000`, console at `localhost:9001`
+- SeaweedFS (S3-compatible object storage) on `localhost:9000`. MinIO stopped
+  publishing free Docker images in 2025; any S3-compatible store works.
 
 ## Step 3 — Backend
 
@@ -99,17 +100,38 @@ EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=<from Google Cloud>
 
 ## Running tests
 
-```bash
-# backend
-cd backend && pytest
+The backend tests are integration tests: they run against a real Postgres +
+PostGIS (a `bdvisual_test` database is created and migrated automatically) and
+Redis, so start `docker compose up -d postgres redis` first.
 
-# mobile
-cd mobile && npm test
+```bash
+cd backend && pytest --cov        # ~85 tests
+cd mobile && npm run typecheck
+cd admin && npm run build
 ```
+
+No local Python 3.11+? Run everything in the backend image instead:
+
+```bash
+docker compose --profile full build backend
+docker compose run --rm -v "$PWD/backend:/app" backend pytest
+```
+
+## Demo accounts (after `seed_dev`)
+
+| | email | password |
+|---|---|---|
+| User | `demo@pinstagram.app` | `demo1234` |
+| Admin | `admin@pinstagram.app` | `admin1234` |
+
+Without SMTP configured, verification emails are printed to the API log.
 
 ## Common pitfalls
 
 - **Migrations not applied** → `alembic upgrade head`
 - **Mobile can't reach backend on physical device** → replace `localhost` with your machine's LAN IP in `EXPO_PUBLIC_API_BASE_URL`
-- **S3 uploads failing** → MinIO bucket needs to be created; the dev seed script handles this. If not, log into MinIO console and create `bdvisual-media`.
+- **S3 uploads failing** → the bucket is created by the dev seed script. On a physical
+  phone, set `S3_PUBLIC_URL=http://<your-LAN-IP>:9000` in `backend/.env` so presigned
+  upload URLs point somewhere the phone can reach.
+- **Expo Go says the project is incompatible** → the app targets Expo SDK 57; update Expo Go.
 - **Google sign-in not working in Expo Go** → use a development build (`npx expo prebuild` + run native), not Expo Go, for OAuth
