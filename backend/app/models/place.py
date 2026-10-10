@@ -1,9 +1,20 @@
 import uuid
 
-from geoalchemy2 import Geography
-from sqlalchemy import ARRAY, Boolean, Enum, ForeignKey, Integer, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from geoalchemy2 import Geography, Geometry
+from sqlalchemy import (
+    ARRAY,
+    Boolean,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    cast,
+    func,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy.orm import Mapped, column_property, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
 
@@ -13,7 +24,15 @@ class Place(Base, UUIDMixin, TimestampMixin):
 
     name: Mapped[str] = mapped_column(String, nullable=False)
     category: Mapped[str] = mapped_column(
-        Enum("hotel", "restaurant", "cafe", "scenic", "historical", "aesthetic", name="place_category"),
+        Enum(
+            "hotel",
+            "restaurant",
+            "cafe",
+            "scenic",
+            "historical",
+            "aesthetic",
+            name="place_category",
+        ),
         nullable=False,
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -22,6 +41,9 @@ class Place(Base, UUIDMixin, TimestampMixin):
     district: Mapped[str | None] = mapped_column(String, nullable=True)
     area: Mapped[str | None] = mapped_column(String, nullable=True)
     location = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=True)
+    # Read-only coordinates derived from `location`, loaded with every row.
+    lat = column_property(func.ST_Y(cast(location, Geometry)))
+    lng = column_property(func.ST_X(cast(location, Geometry)))
     phone: Mapped[str | None] = mapped_column(String, nullable=True)
     website: Mapped[str | None] = mapped_column(String, nullable=True)
     price_tier: Mapped[str | None] = mapped_column(
@@ -36,6 +58,8 @@ class Place(Base, UUIDMixin, TimestampMixin):
     )
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    avg_rating: Mapped[float] = mapped_column(Numeric(2, 1), default=0.0, nullable=False)
+    avg_rating: Mapped[float] = mapped_column(
+        Numeric(2, 1), default=0.0, nullable=False
+    )
     review_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     save_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

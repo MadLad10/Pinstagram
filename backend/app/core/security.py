@@ -1,10 +1,10 @@
 import hashlib
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from jose import JWTError, jwt
+from jose import jwt
 
 from app.core.config import settings
 
@@ -25,13 +25,13 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def create_access_token(user_id: uuid.UUID, role: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_ACCESS_TTL_MIN)
+    expire = datetime.now(UTC) + timedelta(minutes=settings.JWT_ACCESS_TTL_MIN)
     payload = {"sub": str(user_id), "role": role, "exp": expire, "type": "access"}
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=ALGORITHM)
 
 
 def create_refresh_token(user_id: uuid.UUID) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.JWT_REFRESH_TTL_DAYS)
+    expire = datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TTL_DAYS)
     payload = {
         "sub": str(user_id),
         "jti": str(uuid.uuid4()),

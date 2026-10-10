@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class UserProfile(BaseModel):
@@ -24,8 +25,8 @@ class UserProfile(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    name: str | None = None
-    bio: str | None = None
+    name: str | None = Field(None, min_length=1, max_length=100)
+    bio: str | None = Field(None, max_length=300)
     avatar_url: str | None = None
     location: str | None = None
     is_private: bool | None = None
@@ -48,7 +49,9 @@ class PaginatedUsers(BaseModel):
 
 
 class ReportCreate(BaseModel):
-    target_type: str
+    target_type: Literal["post", "review", "comment", "user"]
     target_id: uuid.UUID
-    reason: str
-    notes: str | None = None
+    reason: Literal[
+        "nudity", "hate", "violence", "spam", "wrong_location", "fake_review", "other"
+    ]
+    notes: str | None = Field(None, max_length=1000)

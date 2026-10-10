@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from sqlalchemy import func, select
 
-from app.core.deps import AdminUserID, DB
+from app.core.deps import DB, AdminUserID
 from app.models.place import Place
 from app.models.post import Post
 from app.models.report import Report
@@ -13,6 +13,8 @@ router = APIRouter()
 
 @router.get("/stats")
 async def get_stats(db: DB, _admin: AdminUserID):
+    """Moderation queue sizes and headline totals for the dashboard."""
+
     async def count(model, where=None):
         q = select(func.count()).select_from(model)
         if where is not None:

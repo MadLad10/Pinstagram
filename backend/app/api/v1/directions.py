@@ -13,7 +13,7 @@ router = APIRouter(tags=["directions"])
 async def get_directions(
     place_id: uuid.UUID,
     db: DB,
-    from_lat: float = Query(...),
-    from_lng: float = Query(...),
+    from_lat: float = Query(..., ge=-90, le=90),
+    from_lng: float = Query(..., ge=-180, le=180),
 ):
     return await directions_service.get_directions(db, place_id, from_lat, from_lng)
