@@ -6,17 +6,11 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.pinstagram.app",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "We use your location to show nearby places and transport options.",
-        "NSCameraUsageDescription": "Camera is needed to take photos for posts.",
         "NSPhotoLibraryUsageDescription": "Gallery access is needed to pick photos for posts."
       }
     },
@@ -28,8 +22,7 @@
       "package": "com.pinstagram.app",
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE"
+        "ACCESS_COARSE_LOCATION"
       ]
     },
     "plugins": [
@@ -37,7 +30,25 @@
       "expo-secure-store",
       [
         "expo-location",
-        { "locationAlwaysAndWhenInUsePermission": "We use your location to show nearby places." }
+        {
+          "locationWhenInUsePermission": "We use your location to show nearby places and how to get there."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Gallery access lets you pick photos to post.",
+          "cameraPermission": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
       ]
     ],
     "scheme": "pinstagram",

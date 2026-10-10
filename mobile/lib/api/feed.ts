@@ -31,6 +31,9 @@ export const feedApi = {
   getTrending: (cursor?: string) =>
     api.get<PaginatedPosts>("/feed/trending", { params: { cursor, limit: 20 } }).then((r) => r.data),
 
+  getUserPosts: (userId: string, cursor?: string) =>
+    api.get<PaginatedPosts>(`/users/${userId}/posts`, { params: { cursor, limit: 18 } }).then((r) => r.data),
+
   likePost: (postId: string) => api.post(`/posts/${postId}/like`),
   unlikePost: (postId: string) => api.delete(`/posts/${postId}/like`),
 };

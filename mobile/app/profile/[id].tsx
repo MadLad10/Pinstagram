@@ -3,7 +3,7 @@ import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
 import FollowButton from "../../components/social/FollowButton";
-import { api } from "../../lib/api/client";
+import { feedApi } from "../../lib/api/feed";
 import { socialApi } from "../../lib/api/social";
 import { useAuthStore } from "../../store/auth";
 
@@ -25,8 +25,7 @@ export default function PublicProfileScreen() {
 
   const { data: postsData, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ["profile-posts", id],
-    queryFn: ({ pageParam }) =>
-      api.get(`/users/${id}/posts`, { params: { cursor: pageParam, limit: 18 } }).then((r) => r.data),
+    queryFn: ({ pageParam }) => feedApi.getUserPosts(id, pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page: any) => page.next_cursor ?? undefined,
   });

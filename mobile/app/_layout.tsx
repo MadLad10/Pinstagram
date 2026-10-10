@@ -1,10 +1,17 @@
+import "../global.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Slot, useRouter, useSegments } from "expo-router";
+import { Image } from "expo-image";
+import { Stack, useRouter, useSegments } from "expo-router";
+import { cssInterop } from "nativewind";
 import { useEffect } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useAuthStore } from "../store/auth";
 
+// Let expo-image accept Tailwind classes like any core component.
+cssInterop(Image, { className: "style" });
+
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 1000 * 60 * 5, retry: 1 } },
+  defaultOptions: { queries: { staleTime: 1000 * 60, retry: 1 } },
 });
 
 function AuthGate() {
@@ -19,17 +26,21 @@ function AuthGate() {
   useEffect(() => {
     if (!isHydrated) return;
     const inAuth = segments[0] === "(auth)";
+    // A freshly signed-up user is logged in but should still see verify-email.
+    const verifying = inAuth && (segments as string[])[1] === "verify-email";
     if (!user && !inAuth) router.replace("/(auth)/login");
-    if (user && inAuth) router.replace("/(tabs)");
+    if (user && inAuth && !verifying) router.replace("/(tabs)");
   }, [user, isHydrated, segments]);
 
-  return <Slot />;
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
 
 export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthGate />
-    </QueryClientProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <AuthGate />
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }

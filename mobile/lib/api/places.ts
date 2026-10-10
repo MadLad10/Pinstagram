@@ -1,4 +1,5 @@
 import { api } from "./client";
+import { Directions } from "./directions";
 
 export interface Place {
   id: string;
@@ -35,6 +36,8 @@ export interface PlaceSummary {
   area: string | null;
   district: string | null;
   is_verified: boolean;
+  lat: number | null;
+  lng: number | null;
   distance_m: number | null;
 }
 
@@ -48,5 +51,7 @@ export const placesApi = {
   unsave: (id: string) => api.delete(`/places/${id}/save`),
 
   getDirections: (id: string, fromLat: number, fromLng: number) =>
-    api.get(`/places/${id}/directions`, { params: { from_lat: fromLat, from_lng: fromLng } }).then((r) => r.data),
+    api
+      .get<Directions>(`/places/${id}/directions`, { params: { from_lat: fromLat, from_lng: fromLng } })
+      .then((r) => r.data),
 };
