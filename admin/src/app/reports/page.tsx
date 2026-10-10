@@ -8,6 +8,7 @@ import { adminApi } from "@/lib/api";
 interface Report {
   id: string;
   reporter_id: string;
+  reporter_name: string;
   target_type: string;
   target_id: string;
   reason: string;
@@ -38,7 +39,6 @@ function ReportsContent() {
 
   const ACTION_LABELS: Record<string, string> = {
     dismiss: "Dismiss",
-    warn: "Warn user",
     remove_content: "Remove content",
     ban_user: "Ban user",
   };
@@ -68,7 +68,7 @@ function ReportsContent() {
                     <p className="text-sm font-medium text-gray-800">{r.reason}</p>
                     {r.notes && <p className="text-xs text-gray-500 mt-1">{r.notes}</p>}
                     <p className="text-xs text-gray-400 mt-2">
-                      Reporter: {r.reporter_id.slice(0, 8)} · Target: {r.target_id.slice(0, 8)}
+                      Reported by {r.reporter_name} · {r.target_type} <code>{r.target_id.slice(0, 8)}</code>
                     </p>
                   </div>
                   <div className="flex flex-col gap-1.5 shrink-0">

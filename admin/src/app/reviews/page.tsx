@@ -9,6 +9,8 @@ interface Review {
   id: string;
   user_id: string;
   place_id: string;
+  author_name: string;
+  place_name: string;
   rating: number;
   body: string;
   created_at: string;
@@ -63,7 +65,7 @@ function ReviewsContent() {
                       <span className="text-xs text-gray-400">{new Date(r.created_at).toLocaleDateString()}</span>
                     </div>
                     <p className="text-sm text-gray-700">{r.body}</p>
-                    <p className="text-xs text-gray-400 mt-2">User {r.user_id.slice(0, 8)} · Place {r.place_id.slice(0, 8)}</p>
+                    <p className="text-xs text-gray-400 mt-2">{r.author_name} · {r.place_name}</p>
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <button

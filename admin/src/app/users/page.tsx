@@ -96,7 +96,7 @@ function UsersContent() {
                     <td className="px-4 py-3">
                       <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${
                         u.role === "admin" ? "bg-purple-100 text-purple-700"
-                        : u.role === "moderator" ? "bg-blue-100 text-blue-700"
+                        : u.role === "creator" ? "bg-blue-100 text-blue-700"
                         : "bg-gray-100 text-gray-600"
                       }`}>
                         {u.role}
