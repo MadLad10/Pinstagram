@@ -29,6 +29,7 @@ export default function CommentSheet({ postId, onClose }: Props) {
     onSuccess: () => {
       setBody("");
       qc.invalidateQueries({ queryKey: ["comments", postId] });
+      qc.invalidateQueries({ queryKey: ["feed"] });
     },
   });
 
@@ -38,14 +39,14 @@ export default function CommentSheet({ postId, onClose }: Props) {
   });
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1 bg-white">
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100">
         <Text className="font-semibold text-base">Comments</Text>
         <Pressable onPress={onClose}><Text className="text-gray-400">Close</Text></Pressable>
       </View>
 
       {isLoading
-        ? <ActivityIndicator color="#E91E63" className="mt-6" />
+        ? <ActivityIndicator color="#E91E63" style={{ marginTop: 24 }} />
         : <FlatList
             data={comments}
             keyExtractor={(item: any) => item.id}

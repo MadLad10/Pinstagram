@@ -1,20 +1,25 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import * as Linking from "expo-linking";
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import { placesApi } from "../../lib/api/places";
+import { Place, placesApi } from "../../lib/api/places";
+import { reviewsApi } from "../../lib/api/reviews";
 import HowToGetThere from "../../components/place/HowToGetThere";
+import ReviewCard from "../../components/reviews/ReviewCard";
 
 const PRICE_LABELS: Record<string, string> = { budget: "৳", mid: "৳৳", luxury: "৳৳৳" };
 
 export default function PlaceScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const qc = useQueryClient();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationDenied, setLocationDenied] = useState(false);
 
   useEffect(() => {
     Location.requestForegroundPermissionsAsync().then(({ status }) => {
@@ -22,6 +27,8 @@ export default function PlaceScreen() {
         Location.getCurrentPositionAsync({}).then((loc) =>
           setUserLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude })
         );
+      } else {
+        setLocationDenied(true);
       }
     });
   }, []);
@@ -30,6 +37,28 @@ export default function PlaceScreen() {
     queryKey: ["place", id],
     queryFn: () => placesApi.get(id),
     staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: reviews } = useQuery({
+    queryKey: ["reviews", id, "preview"],
+    queryFn: () => reviewsApi.list(id),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (saved: boolean) => (saved ? placesApi.unsave(id) : placesApi.save(id)),
+    onMutate: async (saved) => {
+      await qc.cancelQueries({ queryKey: ["place", id] });
+      const prev = qc.getQueryData<Place>(["place", id]);
+      qc.setQueryData<Place>(["place", id], (p: Place | undefined) =>
+        p && { ...p, is_saved_by_me: !saved, save_count: p.save_count + (saved ? -1 : 1) }
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      qc.setQueryData(["place", id], ctx?.prev);
+      Alert.alert("Couldn't update saved places");
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["saved-places"] }),
   });
 
   if (isLoading)
@@ -51,7 +80,7 @@ export default function PlaceScreen() {
           <Ionicons name="arrow-back" size={20} color="white" />
         </Pressable>
         {place.cover_photo_url ? (
-          <Image source={{ uri: place.cover_photo_url }} className="w-full h-72" resizeMode="cover" />
+          <Image source={{ uri: place.cover_photo_url }} style={{ width: "100%", height: 288 }} contentFit="cover" />
         ) : (
           <View className="w-full h-72 bg-gray-200 items-center justify-center">
             <Text className="text-gray-400 text-4xl">📍</Text>
@@ -79,9 +108,9 @@ export default function PlaceScreen() {
         {/* Actions */}
         <View className="flex-row gap-3 mb-6">
           <Pressable className="flex-1 border border-gray-200 rounded-xl py-3 items-center flex-row justify-center gap-2"
-            onPress={() => placesApi[place.is_saved_by_me ? "unsave" : "save"](place.id)}>
+            onPress={() => saveMutation.mutate(place.is_saved_by_me)}>
             <Ionicons name={place.is_saved_by_me ? "bookmark" : "bookmark-outline"} size={18} color="#E91E63" />
-            <Text className="text-pink-600 font-medium text-sm">Save</Text>
+            <Text className="text-pink-600 font-medium text-sm">{place.is_saved_by_me ? "Saved" : "Save"}</Text>
           </Pressable>
           <Pressable className="flex-1 bg-pink-600 rounded-xl py-3 items-center flex-row justify-center gap-2"
             onPress={() => router.push(`/place/${id}/review`)}>
@@ -126,12 +155,16 @@ export default function PlaceScreen() {
         )}
 
         {/* How to Get There */}
-        {userLocation ? (
+        {place.lat == null || place.lng == null ? null : userLocation ? (
           <HowToGetThere placeId={id} userLat={userLocation.lat} userLng={userLocation.lng} placeLat={place.lat} placeLng={place.lng} />
         ) : (
           <View className="bg-gray-50 rounded-xl p-4 mb-6">
             <Text className="font-semibold mb-1">How to Get There</Text>
-            <Text className="text-gray-500 text-sm">Enable location to see transport options</Text>
+            {locationDenied ? (
+              <Text className="text-gray-500 text-sm">Allow location access in Settings to see bus, ride-hail and train options.</Text>
+            ) : (
+              <ActivityIndicator color="#E91E63" />
+            )}
           </View>
         )}
 
@@ -142,6 +175,23 @@ export default function PlaceScreen() {
             <Text className="text-gray-600 leading-relaxed">{place.description}</Text>
           </View>
         )}
+
+        {/* Reviews */}
+        <View className="mb-8">
+          <View className="flex-row items-center justify-between mb-2">
+            <Text className="font-semibold text-lg">Reviews</Text>
+            {place.review_count > 0 && (
+              <Pressable onPress={() => router.push(`/place/${id}/reviews`)}>
+                <Text className="text-pink-600 text-sm">See all {place.review_count}</Text>
+              </Pressable>
+            )}
+          </View>
+          {reviews?.items.length ? (
+            reviews.items.slice(0, 3).map((r) => <ReviewCard key={r.id} review={r} />)
+          ) : (
+            <Text className="text-gray-400 text-sm">No reviews yet — be the first.</Text>
+          )}
+        </View>
       </View>
     </ScrollView>
   );
