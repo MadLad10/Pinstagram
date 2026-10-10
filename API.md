@@ -48,6 +48,9 @@ Triggers email verification code send.
 ### `POST /auth/logout`
 Revokes the current refresh token. 204.
 
+### `POST /auth/resend-verification` (204)
+Issues a new code and invalidates older ones.
+
 ### `POST /auth/verify-email` [public]
 ```json
 // req
@@ -105,9 +108,6 @@ Full place details including amenities, hours, recent reviews, recent posts.
 ### `POST /places/{place_id}/save`
 ### `DELETE /places/{place_id}/save`
 
-### `GET /places/{place_id}/posts?cursor=`
-Posts tagged to this place. Only `status=published`.
-
 ### `GET /places/{place_id}/reviews?cursor=`
 
 ### `POST /places/{place_id}/reviews`
@@ -158,9 +158,6 @@ Response:
   ]
 }
 ```
-
-### `GET /places/{place_id}/nearby-hubs`
-Returns nearest bus stops and train stations.
 
 ## Posts
 
@@ -213,9 +210,20 @@ Most-liked posts in last 7 days.
 
 ### `GET /feed/nearby?lat=&lng=&radius_m=50000&cursor=`
 
+### `GET /users/{user_id}/posts?cursor=`
+A user's posts, newest first. Authors also see their own pending/rejected posts.
+
 ## Saved
 
-### `GET /me/saved-places?cursor=`
+### `GET /users/me/saved-places?cursor=`
+
+## Notifications
+
+### `GET /notifications?cursor=`
+Returns `{ items, next_cursor, unread_count }`. Types: `like`, `comment`, `follow`,
+`post_approved`, `post_rejected`, `review_approved`.
+
+### `POST /notifications/read-all` (204)
 
 ## Search
 
@@ -240,7 +248,15 @@ All under `/admin/*`, require `role=admin`.
 ### `POST /admin/reports/{report_id}/resolve` `{ "action": "remove_content" | "ban_user" | "dismiss" }`
 ### `POST /admin/places` — create new place
 ### `PATCH /admin/places/{place_id}`
-### `POST /admin/bus-routes` / `POST /admin/bus-stops` / `POST /admin/train-schedules` — transport data CRUD
+### `POST /admin/bus-routes` / `POST /admin/bus-stops` / `POST /admin/train-stations` / `POST /admin/train-schedules` / `POST /admin/transport-fares` — transport data CRUD
+### `GET /admin/transport/summary`
+### `POST /admin/transport/import/bus-stops` (multipart CSV: `name,lat,lng[,district]`)
+### `POST /admin/transport/import/bus-routes` (multipart CSV: `name,operator,typical_fare,typical_duration_min,stops` — stops are `|`-separated names)
+Imports upsert by name and are all-or-nothing. A bad file returns 422 with
+`{"detail": {"errors": [{"line": 3, "error": "..."}]}}`.
+### `GET /admin/audit-log?cursor=` — every admin action, newest first
+### `GET /admin/users?search=&cursor=` / `POST /admin/users/{id}/ban` / `unban` / `promote` `{ "role": "creator" }`
+### `GET /admin/stats`
 
 ## Rate limits (v1)
 
