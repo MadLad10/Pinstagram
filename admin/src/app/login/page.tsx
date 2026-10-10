@@ -17,8 +17,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await adminApi.login(email, password);
-      if (res.user.role !== "admin" && res.user.role !== "moderator") {
-        setError("Access denied — admin or moderator role required");
+      if (res.user.role !== "admin") {
+        setError("Access denied — admin role required");
         return;
       }
       localStorage.setItem("admin_token", res.access_token);

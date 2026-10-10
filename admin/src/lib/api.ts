@@ -55,7 +55,7 @@ export const adminApi = {
     client.post(`/admin/users/${id}/unban`),
 
   promoteAdmin: (id: string) =>
-    client.post(`/admin/users/${id}/promote`),
+    client.post(`/admin/users/${id}/promote`, { role: "admin" }),
 
   places: (cursor?: string) =>
     client.get("/admin/places", { params: { cursor, limit: 20 } }).then((r) => r.data),
@@ -68,6 +68,18 @@ export const adminApi = {
 
   pendingPosts: (cursor?: string) =>
     client.get("/admin/posts/pending", { params: { cursor, limit: 20 } }).then((r) => r.data),
+
+  auditLog: (cursor?: string) =>
+    client.get("/admin/audit-log", { params: { cursor, limit: 50 } }).then((r) => r.data),
+
+  transportSummary: () =>
+    client.get("/admin/transport/summary").then((r) => r.data),
+
+  importTransport: (kind: "bus-stops" | "bus-routes", file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return client.post(`/admin/transport/import/${kind}`, form).then((r) => r.data);
+  },
 
   approvePost: (id: string) =>
     client.post(`/admin/posts/${id}/approve`),
