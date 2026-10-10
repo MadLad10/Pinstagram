@@ -1,7 +1,6 @@
 import uuid
 
 from sqlalchemy import (
-    ARRAY,
     Enum,
     ForeignKey,
     Integer,

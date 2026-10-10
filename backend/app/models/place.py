@@ -2,7 +2,6 @@ import uuid
 
 from geoalchemy2 import Geography, Geometry
 from sqlalchemy import (
-    ARRAY,
     Boolean,
     Enum,
     ForeignKey,
