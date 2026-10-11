@@ -64,3 +64,15 @@ def test_media_url_defaults_and_override(monkeypatch):
     assert settings.media_base_url == f"http://localhost:9000/{settings.S3_BUCKET}"
     monkeypatch.setattr(settings, "MEDIA_BASE_URL", "https://pub-123.r2.dev/")
     assert settings.media_base_url == "https://pub-123.r2.dev"
+
+
+async def test_uploads_can_be_disabled(client, make_user, monkeypatch):
+    monkeypatch.setattr(settings, "UPLOADS_ENABLED", False)
+    me = await make_user()
+    resp = await client.post(
+        "/api/v1/uploads/presign",
+        headers=me.headers,
+        json={"filename": "a.jpg", "content_type": "image/jpeg", "size": 10},
+    )
+    assert resp.status_code == 503
+    assert "aren't enabled" in resp.json()["detail"]

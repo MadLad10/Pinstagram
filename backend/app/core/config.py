@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # Public base URL for reading media, without a trailing slash. Defaults to
     # path-style `<public endpoint>/<bucket>`; set it for CDNs or R2 public buckets.
     MEDIA_BASE_URL: str = ""
+    # Set false on deployments without object storage; uploads then fail fast
+    # with a clear message instead of a network error in the client.
+    UPLOADS_ENABLED: bool = True
     S3_REGION: str = "us-east-1"
     S3_BUCKET: str = "bdvisual-media"
     S3_ACCESS_KEY: str = "minioadmin"
