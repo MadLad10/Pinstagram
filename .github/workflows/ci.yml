@@ -75,7 +75,7 @@ jobs:
           NEXT_TELEMETRY_DISABLED: 1
 
   mobile:
-    name: Mobile app (typecheck)
+    name: Mobile + web app (typecheck, web build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -89,3 +89,7 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci
       - run: npx tsc --noEmit
+      - name: Web build (what Vercel deploys)
+        run: npx expo export --platform web
+        env:
+          CI: 1
