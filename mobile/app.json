@@ -54,6 +54,15 @@
     "scheme": "pinstagram",
     "experiments": {
       "typedRoutes": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png",
+      "name": "Pinstagram",
+      "shortName": "Pinstagram",
+      "themeColor": "#E91E63",
+      "backgroundColor": "#ffffff"
     }
   }
 }

@@ -3,11 +3,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { showAlert } from "../../lib/alert";
 import PlacePicker from "../../components/PlacePicker";
 import { PlaceSummary } from "../../lib/api/places";
 import { postsApi } from "../../lib/api/posts";
-import { uploadWithProgress } from "../../lib/upload";
+import { prepareUpload } from "../../lib/upload";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -36,7 +37,7 @@ export default function ComposeScreen() {
     if (result.canceled) return;
     const asset = result.assets[0];
     if (asset.fileSize && asset.fileSize > MAX_BYTES) {
-      Alert.alert("File too large", "Please pick something under 50 MB.");
+      showAlert("File too large", "Please pick something under 50 MB.");
       return;
     }
     setMedia(asset);
@@ -51,15 +52,16 @@ export default function ComposeScreen() {
 
   const handlePost = async () => {
     if (!media || !place) {
-      Alert.alert("Missing info", "Pick a photo and tag a place.");
+      showAlert("Missing info", "Pick a photo and tag a place.");
       return;
     }
     setProgress(0);
     try {
       const contentType = contentTypeFor(media);
       const filename = media.fileName ?? media.uri.split("/").pop() ?? "upload.jpg";
-      const { upload_url, file_key } = await postsApi.presign(filename, contentType, media.fileSize ?? 1);
-      await uploadWithProgress(upload_url, media.uri, contentType, setProgress);
+      const upload = await prepareUpload(media.uri, media.fileSize);
+      const { upload_url, file_key } = await postsApi.presign(filename, contentType, upload.size);
+      await upload.send(upload_url, contentType, setProgress);
 
       const hashtags = Array.from(caption.matchAll(/#(\w+)/g), (m) => m[1]);
       await postsApi.create({
@@ -73,10 +75,10 @@ export default function ComposeScreen() {
 
       qc.invalidateQueries({ queryKey: ["my-posts"] });
       reset();
-      Alert.alert("Posted!", "Your post will appear in feeds once a moderator approves it.");
+      showAlert("Posted!", "Your post will appear in feeds once a moderator approves it.");
       router.replace("/(tabs)/profile");
     } catch (e: any) {
-      Alert.alert("Upload failed", e?.response?.data?.detail ?? e?.message ?? "Please try again.");
+      showAlert("Upload failed", e?.response?.data?.detail ?? e?.message ?? "Please try again.");
     } finally {
       setProgress(null);
     }

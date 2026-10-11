@@ -1,9 +1,10 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import MapView, { Marker, Region } from "react-native-maps";
+import PlacesMap from "../../components/map/PlacesMap";
+import { MapRegion } from "../../components/map/types";
 import { placesApi, PlaceSummary } from "../../lib/api/places";
 import { useDebounce } from "../../lib/hooks/useDebounce";
 
@@ -16,12 +17,12 @@ const CATEGORY_COLORS: Record<string, string> = {
   aesthetic: "#3B82F6",
 };
 
-const DHAKA: Region = { latitude: 23.7806, longitude: 90.4074, latitudeDelta: 0.12, longitudeDelta: 0.12 };
+const DHAKA: MapRegion = { latitude: 23.7806, longitude: 90.4074, latitudeDelta: 0.12, longitudeDelta: 0.12 };
 
 export default function MapScreen() {
   const router = useRouter();
-  const mapRef = useRef<MapView>(null);
-  const [region, setRegion] = useState<Region>(DHAKA);
+  const [region, setRegion] = useState<MapRegion>(DHAKA);
+  const [recenterKey, setRecenterKey] = useState(0);
   const [category, setCategory] = useState<string | null>(null);
   const [selected, setSelected] = useState<PlaceSummary | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -57,33 +58,21 @@ export default function MapScreen() {
 
   return (
     <View className="flex-1">
-      <MapView
-        ref={mapRef}
-        style={{ flex: 1 }}
+      <PlacesMap
         initialRegion={DHAKA}
-        onRegionChangeComplete={setRegion}
-        showsUserLocation={!!userLocation}
-        onPress={() => setSelected(null)}
-      >
-        {data?.items
-          .filter((p) => p.lat != null && p.lng != null)
-          .map((place) => (
-            <Marker
-              key={place.id}
-              coordinate={{ latitude: place.lat!, longitude: place.lng! }}
-              pinColor={CATEGORY_COLORS[place.category] ?? "#E91E63"}
-              onPress={(e) => {
-                e.stopPropagation();
-                setSelected(place);
-              }}
-            />
-          ))}
-      </MapView>
+        places={data?.items.filter((p) => p.lat != null && p.lng != null) ?? []}
+        colors={CATEGORY_COLORS}
+        userLocation={userLocation}
+        recenterKey={recenterKey}
+        onRegionChange={setRegion}
+        onSelect={setSelected}
+      />
 
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         className="absolute top-12 left-0 right-0"
+        style={{ zIndex: 1000 }}
         contentContainerStyle={{ paddingHorizontal: 12, gap: 8 }}
       >
         {[null, ...Object.keys(CATEGORY_COLORS)].map((c) => (
@@ -102,21 +91,15 @@ export default function MapScreen() {
       {userLocation && (
         <Pressable
           className="absolute bottom-40 right-4 bg-white rounded-full p-3 shadow-md"
-          onPress={() =>
-            mapRef.current?.animateToRegion({
-              latitude: userLocation.lat,
-              longitude: userLocation.lng,
-              latitudeDelta: 0.03,
-              longitudeDelta: 0.03,
-            })
-          }
+          style={{ zIndex: 1000 }}
+          onPress={() => setRecenterKey((k) => k + 1)}
         >
           <Text className="text-lg">📍</Text>
         </Pressable>
       )}
 
       {selected && (
-        <View className="absolute bottom-0 left-0 right-0 bg-white p-4 rounded-t-2xl shadow-lg">
+        <View className="absolute bottom-0 left-0 right-0 bg-white p-4 rounded-t-2xl shadow-lg" style={{ zIndex: 1000 }}>
           <Text className="font-bold text-lg">{selected.name}</Text>
           <Text className="text-gray-500 capitalize">
             {selected.category}

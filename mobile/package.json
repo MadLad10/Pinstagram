@@ -6,9 +6,12 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "web": "expo start --web",
+    "build:web": "expo export --platform web"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~57.0.16",
     "@expo/vector-icons": "^15.0.2",
     "@tanstack/react-query": "^5.40.0",
     "@types/react": "~19.2.4",
@@ -26,9 +29,11 @@
     "expo-secure-store": "~57.0.4",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
+    "leaflet": "^1.9.4",
     "nativewind": "^4.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-leaflet": "^5.0.0",
     "react-native": "0.86.3",
     "react-native-css-interop": "^0.2.7",
     "react-native-gesture-handler": "~2.32.0",
@@ -36,6 +41,7 @@
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
+    "react-native-web": "^0.21.2",
     "react-native-worklets": "0.10.1",
     "tailwindcss": "^3.4.3",
     "typescript": "~6.0.3",
@@ -43,6 +49,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
+    "@types/leaflet": "^1.9.12",
     "@types/react": "~19.2.10",
     "typescript": "~6.0.3"
   }

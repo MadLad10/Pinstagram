@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { showAlert } from "../../lib/alert";
 import { useRouter } from "expo-router";
 import { authApi } from "../../lib/api/auth";
 import { useAuthStore } from "../../store/auth";
@@ -11,14 +12,19 @@ export default function LoginScreen() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
 
-  const handleLogin = async () => {
-    if (!email.trim() || !password) return;
+  const DEMO_EMAIL = process.env.EXPO_PUBLIC_DEMO_EMAIL;
+  const DEMO_PASSWORD = process.env.EXPO_PUBLIC_DEMO_PASSWORD;
+
+  const handleLogin = async (creds?: { email: string; password: string }) => {
+    const e = creds?.email ?? email.trim();
+    const p = creds?.password ?? password;
+    if (!e || !p) return;
     setLoading(true);
     try {
-      const res = await authApi.login(email.trim(), password);
+      const res = await authApi.login(e, p);
       await login(res.access_token, res.refresh_token, res.user);
     } catch (e: any) {
-      Alert.alert("Login failed", e?.response?.data?.detail ?? "Invalid email or password");
+      showAlert("Login failed", e?.response?.data?.detail ?? "Invalid email or password");
     } finally {
       setLoading(false);
     }
@@ -47,11 +53,21 @@ export default function LoginScreen() {
 
       <Pressable
         className="bg-pink-600 rounded-xl py-4 items-center mb-4"
-        onPress={handleLogin}
+        onPress={() => handleLogin()}
         disabled={loading}
       >
         {loading ? <ActivityIndicator color="white" /> : <Text className="text-white font-semibold text-base">Log in</Text>}
       </Pressable>
+
+      {DEMO_EMAIL && DEMO_PASSWORD && (
+        <Pressable
+          className="border border-pink-600 rounded-xl py-4 items-center mb-6"
+          onPress={() => handleLogin({ email: DEMO_EMAIL, password: DEMO_PASSWORD })}
+          disabled={loading}
+        >
+          <Text className="text-pink-600 font-semibold text-base">Try the demo account</Text>
+        </Pressable>
+      )}
 
       <Pressable onPress={() => router.push("/(auth)/signup")}>
         <Text className="text-center text-gray-500">

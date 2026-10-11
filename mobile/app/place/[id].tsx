@@ -4,7 +4,8 @@ import * as Linking from "expo-linking";
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { showAlert } from "../../lib/alert";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { Place, placesApi } from "../../lib/api/places";
@@ -56,7 +57,7 @@ export default function PlaceScreen() {
     },
     onError: (_e, _v, ctx) => {
       qc.setQueryData(["place", id], ctx?.prev);
-      Alert.alert("Couldn't update saved places");
+      showAlert("Couldn't update saved places");
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["saved-places"] }),
   });

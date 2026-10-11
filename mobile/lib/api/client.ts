@@ -1,12 +1,12 @@
+import { storage } from "../storage";
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
-import * as SecureStore from "expo-secure-store";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
 export const api = axios.create({ baseURL: BASE_URL });
 
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
-  const token = await SecureStore.getItemAsync("access_token");
+  const token = await storage.get("access_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -40,20 +40,20 @@ api.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      const refreshToken = await SecureStore.getItemAsync("refresh_token");
+      const refreshToken = await storage.get("refresh_token");
       if (!refreshToken) throw new Error("No refresh token");
       const res = await axios.post(`${BASE_URL}/auth/refresh`, { refresh_token: refreshToken });
       const { access_token, refresh_token } = res.data;
-      await SecureStore.setItemAsync("access_token", access_token);
-      await SecureStore.setItemAsync("refresh_token", refresh_token);
+      await storage.set("access_token", access_token);
+      await storage.set("refresh_token", refresh_token);
       api.defaults.headers.common.Authorization = `Bearer ${access_token}`;
       processQueue(null, access_token);
       original.headers.Authorization = `Bearer ${access_token}`;
       return api(original);
     } catch (e) {
       processQueue(e, null);
-      await SecureStore.deleteItemAsync("access_token");
-      await SecureStore.deleteItemAsync("refresh_token");
+      await storage.remove("access_token");
+      await storage.remove("refresh_token");
       return Promise.reject(e);
     } finally {
       isRefreshing = false;
