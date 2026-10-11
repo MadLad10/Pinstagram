@@ -33,9 +33,18 @@ def s3_client(endpoint: str | None = None):
     )
 
 
+def _require_uploads() -> None:
+    if not settings.UPLOADS_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Photo uploads aren't enabled on this demo yet",
+        )
+
+
 async def presign_upload(
     filename: str, content_type: str, size: int
 ) -> PresignResponse:
+    _require_uploads()
     if content_type not in ALLOWED_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

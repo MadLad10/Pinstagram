@@ -27,6 +27,9 @@ PostGIS and pg_trgm are enabled automatically by the first migration.
 
 ## 2. Upstash (Redis)
 
+> Alternative: Render's free **Key Value** store (Render → New → Key Value, same region
+> as the API). Use its *internal* connection URL as `REDIS_URL` and skip Upstash.
+
 1. Sign up at https://upstash.com → **Create database** (Redis, same region).
 2. Copy the **`rediss://...` connection URL** (TLS, with the password in it).
    **→ save as `REDIS_URL`**
@@ -52,6 +55,9 @@ PostGIS and pg_trgm are enabled automatically by the first migration.
    on this bucket. Copy:
    **→ `S3_ACCESS_KEY`** (Access Key ID), **→ `S3_SECRET_KEY`** (Secret Access Key),
    **→ `S3_ENDPOINT`** (`https://<account-id>.r2.cloudflarestorage.com`).
+
+> No R2 yet? Skip this step and set `UPLOADS_ENABLED=false` on the API. Everything
+> except posting new photos works, and the app explains why uploads are off.
 
 ## 4. Render (API)
 
