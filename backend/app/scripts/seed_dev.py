@@ -13,6 +13,7 @@ Images are placeholders from picsum.photos.
 
 import asyncio
 import random
+import secrets
 from datetime import UTC, datetime, time, timedelta
 
 from geoalchemy2.elements import WKTElement
@@ -475,9 +476,21 @@ REVIEW_BODIES = [
 ]
 
 
+def _password_for(email: str, role: str, admin_password: str, production: bool) -> str:
+    """Only the shared demo login is public. On a public deployment the other
+    seeded accounts get unguessable passwords."""
+    if role == "admin":
+        return admin_password
+    if email == settings.DEMO_USER_EMAIL or not production:
+        return DEMO_PASSWORD
+    return secrets.token_urlsafe(24)
+
+
 async def seed() -> None:
-    if settings.ENV == "production":
-        raise SystemExit("Refusing to seed demo data into production.")
+    production = settings.ENV == "production"
+    if production and not settings.ADMIN_PASSWORD:
+        raise SystemExit("Set ADMIN_PASSWORD before seeding a public deployment.")
+    admin_password = settings.ADMIN_PASSWORD or "admin1234"
     try:
         ensure_bucket_exists()
     except Exception as exc:  # storage is optional for browsing seeded data
@@ -494,7 +507,7 @@ async def seed() -> None:
                 user = User(
                     email=email,
                     password_hash=hash_password(
-                        DEMO_PASSWORD if role != "admin" else "admin1234"
+                        _password_for(email, role, admin_password, production)
                     ),
                     name=name,
                     bio=bio,
@@ -716,9 +729,10 @@ async def seed() -> None:
 
         await db.commit()
 
+    admin_hint = "<ADMIN_PASSWORD>" if settings.ADMIN_PASSWORD else "admin1234"
     print(
         f"\nSeed complete. Log in as demo@pinstagram.app / {DEMO_PASSWORD} "
-        "(admin: admin@pinstagram.app / admin1234)"
+        f"(admin: admin@pinstagram.app / {admin_hint})"
     )
 
 

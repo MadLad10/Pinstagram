@@ -62,9 +62,17 @@ async def hit(key: str, limit: int, window_s: int) -> int | None:
 
 
 def client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    hops = settings.TRUSTED_PROXY_HOPS
+    if hops > 0:
+        # Each trusted proxy appends the address it saw; anything to the left
+        # of those entries came from the client and can be forged.
+        chain = [
+            ip.strip()
+            for ip in request.headers.get("x-forwarded-for", "").split(",")
+            if ip.strip()
+        ]
+        if len(chain) >= hops:
+            return chain[-hops]
     return request.client.host if request.client else "unknown"
 
 
