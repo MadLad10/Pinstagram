@@ -121,7 +121,7 @@ async def create_post(
     post = Post(
         user_id=user_id,
         place_id=place.id,
-        media_url=f"{settings.s3_public_base}/{settings.S3_BUCKET}/{data.file_key}",
+        media_url=f"{settings.media_base_url}/{data.file_key}",
         media_type=data.media_type,
         caption=data.caption,
         hashtags=data.hashtags,

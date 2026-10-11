@@ -1,9 +1,10 @@
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.core.deps import DB, CurrentUserID, OptionalUserID
 from app.models.user import User
 from app.schemas.auth import UserRead
@@ -21,6 +22,14 @@ async def _me(db: DB, user_id: uuid.UUID) -> User:
     return (await db.execute(select(User).where(User.id == user_id))).scalar_one()
 
 
+def _forbid_demo_account(user: User) -> None:
+    if settings.DEMO_USER_EMAIL and user.email == settings.DEMO_USER_EMAIL:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This action is disabled for the shared demo account",
+        )
+
+
 @router.get("/me", response_model=UserRead)
 async def get_me(user_id: CurrentUserID, db: DB):
     return UserRead.model_validate(await _me(db, user_id))
@@ -29,6 +38,7 @@ async def get_me(user_id: CurrentUserID, db: DB):
 @router.patch("/me", response_model=UserRead)
 async def update_me(body: UserUpdate, user_id: CurrentUserID, db: DB):
     user = await _me(db, user_id)
+    _forbid_demo_account(user)
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(user, field, value)
     await db.commit()
@@ -39,6 +49,7 @@ async def update_me(body: UserUpdate, user_id: CurrentUserID, db: DB):
 @router.delete("/me", status_code=204)
 async def delete_me(user_id: CurrentUserID, db: DB):
     user = await _me(db, user_id)
+    _forbid_demo_account(user)
     user.deleted_at = datetime.now(UTC)
     await auth_service.revoke_all_sessions(db, user_id)
     await db.commit()
