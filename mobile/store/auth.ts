@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store";
+import { storage } from "../lib/storage";
 import { create } from "zustand";
 import { authApi, User } from "../lib/api/auth";
 
@@ -22,8 +22,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isHydrated: false,
 
   login: async (accessToken, refreshToken, user) => {
-    await SecureStore.setItemAsync("access_token", accessToken);
-    await SecureStore.setItemAsync("refresh_token", refreshToken);
+    await storage.set("access_token", accessToken);
+    await storage.set("refresh_token", refreshToken);
     set({ accessToken, refreshToken, user });
   },
 
@@ -32,23 +32,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       if (refreshToken) await authApi.logout(refreshToken);
     } catch {}
-    await SecureStore.deleteItemAsync("access_token");
-    await SecureStore.deleteItemAsync("refresh_token");
+    await storage.remove("access_token");
+    await storage.remove("refresh_token");
     set({ user: null, accessToken: null, refreshToken: null });
   },
 
   hydrate: async () => {
     set({ isLoading: true });
     try {
-      const accessToken = await SecureStore.getItemAsync("access_token");
-      const refreshToken = await SecureStore.getItemAsync("refresh_token");
+      const accessToken = await storage.get("access_token");
+      const refreshToken = await storage.get("refresh_token");
       if (accessToken && refreshToken) {
         const user = await authApi.getMe();
         set({ accessToken, refreshToken, user });
       }
     } catch {
-      await SecureStore.deleteItemAsync("access_token");
-      await SecureStore.deleteItemAsync("refresh_token");
+      await storage.remove("access_token");
+      await storage.remove("refresh_token");
     } finally {
       set({ isLoading: false, isHydrated: true });
     }

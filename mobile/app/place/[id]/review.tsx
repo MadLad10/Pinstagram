@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { showAlert } from "../../../lib/alert";
 import StarRating from "../../../components/reviews/StarRating";
 import { reviewsApi } from "../../../lib/api/reviews";
 
@@ -21,11 +22,11 @@ export default function WriteReviewScreen() {
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["place", id] });
-      Alert.alert("Review submitted", "It'll appear once approved.");
+      showAlert("Review submitted", "It'll appear once approved.");
       router.back();
     },
     onError: (e: any) => {
-      Alert.alert("Error", e?.response?.data?.detail ?? "Something went wrong");
+      showAlert("Error", e?.response?.data?.detail ?? "Something went wrong");
     },
   });
 

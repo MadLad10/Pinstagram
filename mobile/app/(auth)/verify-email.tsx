@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { showAlert } from "../../lib/alert";
 import { useRouter } from "expo-router";
 import { authApi } from "../../lib/api/auth";
 import { useAuthStore } from "../../store/auth";
@@ -18,7 +19,7 @@ export default function VerifyEmailScreen() {
       setUser({ ...user, email_verified: true });
       router.replace("/(tabs)");
     } catch (e: any) {
-      Alert.alert("Verification failed", e?.response?.data?.detail ?? "Invalid or expired code");
+      showAlert("Verification failed", e?.response?.data?.detail ?? "Invalid or expired code");
     } finally {
       setLoading(false);
     }

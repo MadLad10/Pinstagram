@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { showAlert } from "../../lib/alert";
 import { useRouter } from "expo-router";
 import { authApi } from "../../lib/api/auth";
 import { useAuthStore } from "../../store/auth";
@@ -14,7 +15,7 @@ export default function SignupScreen() {
 
   const handleSignup = async () => {
     if (password.length < 8) {
-      Alert.alert("Password too short", "Password must be at least 8 characters.");
+      showAlert("Password too short", "Password must be at least 8 characters.");
       return;
     }
     setLoading(true);
@@ -23,7 +24,7 @@ export default function SignupScreen() {
       await login(res.access_token, res.refresh_token, res.user);
       if (!res.user.email_verified) router.replace("/(auth)/verify-email");
     } catch (e: any) {
-      Alert.alert("Sign up failed", e?.response?.data?.detail ?? "Something went wrong");
+      showAlert("Sign up failed", e?.response?.data?.detail ?? "Something went wrong");
     } finally {
       setLoading(false);
     }

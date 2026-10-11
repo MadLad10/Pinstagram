@@ -2,7 +2,8 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
+import { showAlert } from "../../lib/alert";
 import { api } from "../../lib/api/client";
 import { feedApi, FeedPost } from "../../lib/api/feed";
 import { PlaceSummary } from "../../lib/api/places";
@@ -77,7 +78,7 @@ export default function MyProfileScreen() {
     <View className="px-4 py-8">
       <Pressable
         className="border border-red-300 rounded-xl py-3 items-center"
-        onPress={() => Alert.alert("Log out?", undefined, [{ text: "Cancel" }, { text: "Log out", style: "destructive", onPress: logout }])}
+        onPress={() => showAlert("Log out?", undefined, [{ text: "Cancel" }, { text: "Log out", style: "destructive", onPress: logout }])}
       >
         <Text className="text-red-500 font-medium">Log out</Text>
       </Pressable>
