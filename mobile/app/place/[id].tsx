@@ -4,13 +4,14 @@ import * as Linking from "expo-linking";
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { showAlert } from "../../lib/alert";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { Place, placesApi } from "../../lib/api/places";
 import { reviewsApi } from "../../lib/api/reviews";
 import HowToGetThere from "../../components/place/HowToGetThere";
+import ReviewSummary from "../../components/place/ReviewSummary";
 import ReviewCard from "../../components/reviews/ReviewCard";
 
 const PRICE_LABELS: Record<string, string> = { budget: "৳", mid: "৳৳", luxury: "৳৳৳" };
@@ -176,6 +177,9 @@ export default function PlaceScreen() {
             <Text className="text-gray-600 leading-relaxed">{place.description}</Text>
           </View>
         )}
+
+        {/* AI review summary (web build only for now) */}
+        {Platform.OS === "web" && <ReviewSummary placeId={id} />}
 
         {/* Reviews */}
         <View className="mb-8">
