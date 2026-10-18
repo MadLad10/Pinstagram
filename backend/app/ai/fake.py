@@ -27,11 +27,13 @@ def text_reply(content: str) -> ChatResult:
     return ChatResult(content=content, model="fake-llm", finish_reason="stop")
 
 
-def tool_reply(*calls: tuple[str, dict], content: str = "") -> ChatResult:
+def tool_reply(
+    *calls: tuple[str, dict], content: str = "", id_prefix: str = "call"
+) -> ChatResult:
     return ChatResult(
         content=content,
         tool_calls=[
-            ToolCall(id=f"call_{i}", name=name, arguments=args)
+            ToolCall(id=f"{id_prefix}_{i}", name=name, arguments=args)
             for i, (name, args) in enumerate(calls)
         ],
         model="fake-llm",

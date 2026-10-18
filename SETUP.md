@@ -105,7 +105,7 @@ PostGIS (a `bdvisual_test` database is created and migrated automatically) and
 Redis, so start `docker compose up -d postgres redis` first.
 
 ```bash
-cd backend && pytest --cov        # ~85 tests
+cd backend && pytest --cov        # ~160 tests
 cd mobile && npm run typecheck
 cd admin && npm run build
 ```

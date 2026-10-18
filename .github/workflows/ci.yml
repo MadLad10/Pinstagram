@@ -62,6 +62,9 @@ jobs:
           alembic upgrade head
       - name: Tests
         run: pytest --cov --cov-report=term-missing:skip-covered
+      - name: AI eval (offline, fake providers)
+        # Keeps the eval harness working; scores go to the job summary.
+        run: python -m evals.run --out /tmp/evals >> "$GITHUB_STEP_SUMMARY"
 
   admin:
     name: Admin dashboard (build)
