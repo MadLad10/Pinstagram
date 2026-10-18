@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Query
 from sqlalchemy import select, tuple_
 
+from app.ai import indexing
 from app.api.v1.admin.schemas import ReasonBody
 from app.core.deps import DB, AdminUserID
 from app.core.pagination import decode_cursor, encode_cursor
@@ -70,6 +71,7 @@ async def approve_review(review_id: uuid.UUID, db: DB, admin: AdminUserID):
     notify(db, user_id=review.user_id, type="review_approved", place_id=review.place_id)
     log_action(db, admin, "approve_review", "review", review_id)
     await db.commit()
+    indexing.wake()  # make the review searchable now, not at the next poll
 
 
 @router.post("/reviews/{review_id}/reject", status_code=204)

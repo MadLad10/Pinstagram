@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Query
 from sqlalchemy import select, tuple_
 
+from app.ai import indexing
 from app.core.deps import DB, AdminUserID
 from app.core.pagination import decode_cursor, encode_cursor
 from app.models.place import Place
@@ -89,6 +90,7 @@ async def create_place(body: PlaceCreate, db: DB, admin: AdminUserID):
     place = await places_service.create_place(db, body, verified=True)
     log_action(db, admin, "create_place", "place", place.id)
     await db.commit()
+    indexing.wake()
     return place
 
 
@@ -99,7 +101,9 @@ async def update_place(
     log_action(
         db, admin, "update_place", "place", place_id, body.model_dump(exclude_none=True)
     )
-    return await places_service.update_place(db, place_id, body)
+    place = await places_service.update_place(db, place_id, body)
+    indexing.wake()
+    return place
 
 
 async def _set_flag(
@@ -114,6 +118,7 @@ async def _set_flag(
 @router.post("/places/{place_id}/approve", status_code=204)
 async def approve_place(place_id: uuid.UUID, db: DB, admin: AdminUserID):
     await _set_flag(db, admin, place_id, "is_verified", True)
+    indexing.wake()
 
 
 @router.post("/places/{place_id}/feature", status_code=204)

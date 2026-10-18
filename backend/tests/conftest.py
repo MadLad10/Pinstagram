@@ -11,6 +11,7 @@ import subprocess
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 # Must be set before the app (and its settings/engine) is imported.
 _base_url = os.environ.get(
@@ -23,6 +24,9 @@ os.environ["DATABASE_URL"] = TEST_DB_URL
 os.environ["ENV"] = "test"
 os.environ["RATE_LIMIT_ENABLED"] = "false"
 os.environ["JWT_SECRET"] = "test-secret"
+os.environ["AI_ENABLED"] = "true"
+os.environ["EMBEDDING_WORKER_ENABLED"] = "false"
+os.environ["LLM_FREE_TIER"] = "true"
 # Separate Redis DB so rate-limit tests can flush it freely.
 os.environ["REDIS_URL"] = (
     os.environ.get("REDIS_URL", "redis://localhost:6379/0").rsplit("/", 1)[0] + "/15"
@@ -39,6 +43,7 @@ from app.db.session import AsyncSessionLocal  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.place import Place  # noqa: E402
 from app.models.post import Post  # noqa: E402
+from app.models.review import Review  # noqa: E402
 from app.models.user import User  # noqa: E402
 
 PASSWORD = "password123"
@@ -104,6 +109,19 @@ def _fresh_redis_client():
     rate_limit._redis = None
     yield
     rate_limit._redis = None
+
+
+@pytest.fixture(autouse=True)
+def fake_ai():
+    """Every test runs against deterministic fakes; nothing reaches a real model.
+    Script replies with `fake_ai.llm.queue(...)`."""
+    from app import ai
+    from app.ai.fake import FakeEmbedder, FakeLLM
+
+    fakes = SimpleNamespace(llm=FakeLLM(), embedder=FakeEmbedder())
+    ai.set_providers(llm=fakes.llm, embedder=fakes.embedder)
+    yield fakes
+    ai.set_providers()
 
 
 @pytest.fixture
@@ -226,6 +244,33 @@ def make_post():
             await db.commit()
             await db.refresh(post)
             return post
+
+    return _make
+
+
+@pytest.fixture
+def make_review():
+    async def _make(
+        author: Actor,
+        place: Place,
+        body: str = "Nice place.",
+        rating: int = 4,
+        status: str = "published",
+        **fields,
+    ) -> Review:
+        async with AsyncSessionLocal() as db:
+            review = Review(
+                user_id=author.id,
+                place_id=place.id,
+                body=body,
+                rating=rating,
+                status=status,
+                **fields,
+            )
+            db.add(review)
+            await db.commit()
+            await db.refresh(review)
+            return review
 
     return _make
 
