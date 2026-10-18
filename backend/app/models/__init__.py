@@ -1,4 +1,6 @@
 from app.models.email_verification import EmailVerification
+from app.models.embedding import PlaceEmbedding, ReviewEmbedding
+from app.models.llm_call import LLMCall
 from app.models.place import Place
 from app.models.post import Post, PostComment, PostLike
 from app.models.refresh_token import RefreshToken
@@ -33,4 +35,7 @@ __all__ = [
     "TransportFare",
     "Report",
     "AdminAction",
+    "LLMCall",
+    "PlaceEmbedding",
+    "ReviewEmbedding",
 ]
