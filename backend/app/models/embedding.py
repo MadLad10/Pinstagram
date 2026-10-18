@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
 # Changing this needs a migration and a full re-embed.
-VECTOR_DIM = 768
+VECTOR_DIM = 1024
 
 
 class _EmbeddingColumns:
