@@ -2,13 +2,11 @@
 
 The tables themselves are the job queue: a verified place or published review
 is stale when it has no embedding, was embedded with a different model, or was
-updated after it was embedded. `embed_pending()` processes one batch;
-`run_worker()` loops forever in the API process (Render's free plan has no
-separate worker), and `python -m app.scripts.embed_backfill` drains the queue
-from a shell.
+updated after it was embedded. `embed_pending()` processes one batch; the
+background worker (app.ai.worker) calls it in a loop, and
+`python -m app.scripts.embed_backfill` drains the queue from a shell.
 """
 
-import asyncio
 import hashlib
 import logging
 
@@ -17,15 +15,12 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai import get_embedder
-from app.core.config import settings
-from app.db.session import AsyncSessionLocal
 from app.models.embedding import PlaceEmbedding, ReviewEmbedding
 
 log = logging.getLogger(__name__)
 
 # Only one API instance embeds at a time.
 _ADVISORY_LOCK_KEY = 0x50_49_4E_53  # "PINS"
-_wake: asyncio.Event | None = None
 
 
 def place_document(row) -> str:
@@ -181,35 +176,3 @@ async def embed_all(db: AsyncSession, batch_size: int = 32) -> int:
     while n := await embed_pending(db, batch_size):
         total += n
     return total
-
-
-def wake() -> None:
-    """Ask the worker to run now instead of at its next interval, e.g. right
-    after a review is approved."""
-    if _wake is not None:
-        _wake.set()
-
-
-async def run_worker() -> None:
-    global _wake
-    _wake = asyncio.Event()
-    backoff = settings.EMBEDDING_WORKER_INTERVAL_S
-    while True:
-        try:
-            async with AsyncSessionLocal() as db:
-                if total := await embed_all(db):
-                    log.info("Embedded %d places/reviews", total)
-            backoff = settings.EMBEDDING_WORKER_INTERVAL_S
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            # Provider down or rate limited: keep the API up and retry later.
-            backoff = min(backoff * 2, 15 * 60)
-            log.warning(
-                "Embedding worker failed; retrying in %ss", backoff, exc_info=True
-            )
-        _wake.clear()
-        try:
-            await asyncio.wait_for(_wake.wait(), timeout=backoff)
-        except TimeoutError:
-            pass
