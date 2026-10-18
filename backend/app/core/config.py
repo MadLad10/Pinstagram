@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     AI_ENABLED: bool = False
     LLM_BASE_URL: str = "http://localhost:11434/v1"
     LLM_API_KEY: str = ""
-    LLM_MODEL: str = "qwen2.5:3b"
+    LLM_MODEL: str = "qwen2.5:3b-instruct"
     LLM_TIMEOUT_S: float = 60
     # Free-tier calls are logged at $0; the list price is logged alongside so
     # you can see what the same traffic would cost on a paid plan.
@@ -88,19 +88,27 @@ class Settings(BaseSettings):
     # Embeddings default to the chat endpoint and key when left empty.
     EMBEDDING_BASE_URL: str = ""
     EMBEDDING_API_KEY: str = ""
-    # Must return at least 768 dimensions (the schema's vector size). Longer
-    # embeddings from Matryoshka models such as gemini-embedding-001 are
+    # Must return at least 1024 dimensions (the schema's vector size). bge-m3
+    # (Ollama) is exactly 1024 and multilingual, so Bangla reviews embed well.
+    # Longer embeddings from Matryoshka models such as gemini-embedding-001 are
     # truncated and re-normalized, which those models are trained to support.
-    EMBEDDING_MODEL: str = "nomic-embed-text"
+    EMBEDDING_MODEL: str = "bge-m3"
     # Cosine similarity below which a vector match is treated as noise. Depends
-    # on the model (unrelated texts score ~0.3-0.4 with nomic-embed-text, higher
-    # with Gemini); tune it with the eval script.
+    # on the model; tune it with the eval script.
     EMBEDDING_MIN_SIMILARITY: float = 0.45
-    # nomic-embed-text expects task prefixes; set both empty for Gemini.
-    EMBEDDING_QUERY_PREFIX: str = "search_query: "
-    EMBEDDING_DOC_PREFIX: str = "search_document: "
+    # Task prefixes for models that expect them (nomic-embed-text uses
+    # "search_query: " / "search_document: "); bge-m3 and Gemini need none.
+    EMBEDDING_QUERY_PREFIX: str = ""
+    EMBEDDING_DOC_PREFIX: str = ""
     AI_WORKER_ENABLED: bool = True
     AI_WORKER_INTERVAL_S: int = 60
+    # Trip-planning assistant. Local CPU models are slow, hence the generous
+    # request timeout; hosted models finish well inside it.
+    ASSISTANT_MAX_STEPS: int = 6
+    ASSISTANT_TOOL_TIMEOUT_S: float = 8
+    ASSISTANT_TIMEOUT_S: float = 90
+    # Per user per day (Dhaka time), counted from llm_calls. 0 = unlimited.
+    ASSISTANT_DAILY_TOKENS: int = 60_000
 
     ENV: str = "local"
 

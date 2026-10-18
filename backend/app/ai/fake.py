@@ -18,6 +18,7 @@ from app.ai.types import (
     Usage,
     estimate_tokens,
 )
+from app.models.embedding import VECTOR_DIM
 
 Responder = Callable[[list[Message], list[ToolSpec] | None], ChatResult | str]
 
@@ -114,7 +115,7 @@ class FakeEmbedder(EmbeddingProvider):
     # Word-overlap cosine: unrelated texts sit near 0, related ones above ~0.2.
     min_similarity = 0.15
 
-    def __init__(self, dim: int = 768):
+    def __init__(self, dim: int = VECTOR_DIM):
         super().__init__()
         self.dim = dim
         self.calls: list[list[str]] = []
