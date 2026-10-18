@@ -4,7 +4,8 @@ from fastapi import APIRouter, Query
 
 from app.core.deps import DB, CurrentUserID, OptionalUserID
 from app.schemas.place import Category, PaginatedPlaces, PlaceRead, PriceTier
-from app.services import places_service
+from app.schemas.summary import ReviewSummaryRead
+from app.services import places_service, summary_service
 
 router = APIRouter(prefix="/places", tags=["places"])
 
@@ -49,6 +50,13 @@ async def list_places(
 @router.get("/{place_id}", response_model=PlaceRead)
 async def get_place(place_id: uuid.UUID, db: DB, user_id: OptionalUserID):
     return await places_service.get_place(db, place_id, user_id)
+
+
+@router.get("/{place_id}/summary", response_model=ReviewSummaryRead)
+async def get_review_summary(place_id: uuid.UUID, db: DB):
+    """Pros, cons and "best for", generated from published reviews only. Each
+    point lists the reviews it came from."""
+    return await summary_service.get_summary(db, place_id)
 
 
 @router.post("/{place_id}/save", status_code=204)

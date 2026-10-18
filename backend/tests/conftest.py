@@ -25,7 +25,7 @@ os.environ["ENV"] = "test"
 os.environ["RATE_LIMIT_ENABLED"] = "false"
 os.environ["JWT_SECRET"] = "test-secret"
 os.environ["AI_ENABLED"] = "true"
-os.environ["EMBEDDING_WORKER_ENABLED"] = "false"
+os.environ["AI_WORKER_ENABLED"] = "false"
 os.environ["LLM_FREE_TIER"] = "true"
 # Separate Redis DB so rate-limit tests can flush it freely.
 os.environ["REDIS_URL"] = (

@@ -99,8 +99,8 @@ class Settings(BaseSettings):
     # nomic-embed-text expects task prefixes; set both empty for Gemini.
     EMBEDDING_QUERY_PREFIX: str = "search_query: "
     EMBEDDING_DOC_PREFIX: str = "search_document: "
-    EMBEDDING_WORKER_ENABLED: bool = True
-    EMBEDDING_WORKER_INTERVAL_S: int = 60
+    AI_WORKER_ENABLED: bool = True
+    AI_WORKER_INTERVAL_S: int = 60
 
     ENV: str = "local"
 

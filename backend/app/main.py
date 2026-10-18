@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from app.ai import indexing
+from app.ai import worker as ai_worker
 from app.api.v1.router import router as v1_router
 from app.core.config import settings
 from app.core.rate_limit import RateLimitMiddleware, close_redis, get_redis
@@ -20,8 +20,8 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     worker = None
-    if settings.AI_ENABLED and settings.EMBEDDING_WORKER_ENABLED:
-        worker = asyncio.create_task(indexing.run_worker(), name="embedding-worker")
+    if settings.AI_ENABLED and settings.AI_WORKER_ENABLED:
+        worker = asyncio.create_task(ai_worker.run_worker(), name="ai-worker")
     yield
     if worker:
         worker.cancel()
