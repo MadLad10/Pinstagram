@@ -8,6 +8,8 @@ A place-discovery app for Bangladesh: an Instagram-style feed of real places, a 
 
 > "Show me a cafe in Banani, and tell me I can take the *Airport Road Express* from Mohakhali for ৳20 (about 30 min), or a Pathao for ~৳180."
 
+On top of that sit three AI features that run on free models (Ollama locally, Gemini's free tier when hosted): **natural-language place search** ("quiet cafe where I can work on my laptop"), **review summaries** where every point cites its reviews, and a **trip-planning assistant** that answers only from the app's own places, routes and fares.
+
 Three apps share one API:
 
 | | Stack |
@@ -17,6 +19,16 @@ Three apps share one API:
 | **Admin dashboard** (`admin/`) | Next.js 14 · Tailwind |
 
 ## Highlights
+
+### AI features
+
+- **Hybrid search on pgvector.** Places and published reviews are embedded (bge-m3, 1024 dimensions, multilingual so Bangla works) into HNSW indexes. A query is matched semantically against both, and by keyword against the weighted `tsvector`, amenities and trigram name similarity. The two rankings are merged with Reciprocal Rank Fusion, then nudged by area, category and distance. Filters are hard constraints inside each query. Search finds a cafe for "laptop" because its *reviews* say so, shows the matching review as the reason, and falls back to keyword ranking if the embedder is down. ([`hybrid_search_service.py`](backend/app/services/hybrid_search_service.py))
+- **Grounded review summaries.** Pros, cons and "best for", generated in the background from published reviews only. The model must cite the reviews behind every point, and grounding is enforced in code: a point is dropped if it cites nothing, cites a review it wasn't shown, quotes a number (price, time) its reviews don't contain, or shares no content words with them. The API returns each point's review ids. A worker regenerates summaries after new reviews arrive, or immediately if a cited review is unpublished. ([`summary_service.py`](backend/app/services/summary_service.py))
+- **Trip-planning agent.** A tool-calling loop (search, place details, fares, bus routes, ride-hail) streamed over Server-Sent Events. It has a step limit, per-tool timeouts, invalid tool arguments returned to the model as errors it can recover from, and a request deadline. After answering, a grounding check flags any place the tools didn't return and any fare not in a tool result. Per-user rate limits and a daily token budget apply. ([`agent.py`](backend/app/ai/agent.py), [`tools.py`](backend/app/ai/tools.py))
+- **One provider layer, every call logged.** A single httpx client for any OpenAI-compatible endpoint (Ollama, Gemini, OpenAI, Groq). Every call is written to `llm_calls` with tokens, latency, status and cost: $0 on free tiers, alongside what the same traffic would cost at list price. ([`app/ai/`](backend/app/ai/))
+- **Measured, not eyeballed.** An eval script scores search ranking and the agent's tool use on hand-written cases ([Evaluation](#evaluation)).
+
+### Core app
 
 - **Transit routing on PostGIS.** For every bus route that serves a stop near the origin and a stop near the destination, each boarding/alighting pair is scored on door-to-door time (walk + wait + ride + walk). Fare and ride time are prorated by the stops ridden, and the cheapest and fastest options are labelled. Ride-hail prices use per-provider base/km/minute rates and estimated road distance, or live Google traffic when a key is set. Train options show the next departure in Dhaka time. ([`directions_service.py`](backend/app/services/directions_service.py))
 - **Full-text and fuzzy search.** A generated, weighted `tsvector` column with a GIN index supports prefix matching ("cafe ban" finds *Banani Book Cafe*), and `pg_trgm` similarity tolerates typos ("lalbag" finds *Lalbagh Fort*). User input is tokenized, so it can never inject tsquery syntax.
@@ -52,15 +64,24 @@ flowchart LR
     W[Web app<br/>Expo web on Vercel] -- REST + JWT --> API
     A -- REST + JWT (admin role) --> API
     M -- presigned PUT --> S3[(S3-compatible<br/>object storage)]
+    W -- "POST /assistant/chat (SSE)" --> API
     subgraph Backend
         API[FastAPI<br/>routers → services]
-        API --> PG[(PostgreSQL + PostGIS<br/>tsvector / pg_trgm)]
+        API --> PG[(PostgreSQL + PostGIS + pgvector<br/>tsvector / pg_trgm / HNSW)]
         API --> R[(Redis<br/>rate limits)]
         API -. optional .-> G[Google Directions API]
+        API --> AGENT[Trip agent<br/>tool loop + grounding check]
+        AGENT -- tools: search, fares,<br/>bus routes, details --> PG
+        WK[AI worker<br/>embeddings, summaries] --> PG
     end
+    AGENT --> LLM
+    WK --> LLM
+    API -- query embeddings --> LLM
+    LLM[OpenAI-compatible provider<br/>Ollama locally · Gemini free tier]
+    LLM -. every call .-> LOG[(llm_calls<br/>tokens, latency, cost)]
 ```
 
-Routers are thin: they validate input with Pydantic and delegate to `app/services/*`, which own every query and transaction. More detail in [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md) and [API.md](API.md).
+Routers are thin: they validate input with Pydantic and delegate to `app/services/*`, which own every query and transaction. Model access goes through one provider interface in `app/ai/`, which tests and the eval script swap for deterministic fakes. The AI worker runs inside the API process: it embeds new places and reviews and regenerates stale review summaries, so requests never wait on a model except for the query embedding and the assistant. More detail in [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md) and [API.md](API.md).
 
 ## Quick start
 
@@ -77,7 +98,38 @@ docker compose exec backend python -m app.scripts.seed_dev
 - Admin: `cd admin && npm install && npm run dev` → http://localhost:3001 (`admin@pinstagram.app` / `admin1234`)
 - Mobile: `cd mobile && npm install && npx expo start`, then scan the QR code with Expo Go (`demo@pinstagram.app` / `demo1234`). On a phone, point `EXPO_PUBLIC_API_BASE_URL` at your computer's LAN IP.
 
-The seed loads 20 Dhaka places (real landmarks plus fictional cafes and restaurants), 33 bus stops on 6 routes along the main corridors, 4 rail stations with timetables, and demo users with posts, likes, comments and reviews. A native Python setup is described in [SETUP.md](SETUP.md).
+The seed loads 25 Dhaka places (real landmarks plus fictional cafes and restaurants), 33 bus stops on 6 routes along the main corridors, 4 rail stations with timetables, and demo users with posts, likes, comments and 108 place-specific reviews. A native Python setup is described in [SETUP.md](SETUP.md).
+
+### Turning on the AI features
+
+They're off by default (`AI_ENABLED=false`), and the app works fully without them. Everything below is free.
+
+**Locally with Ollama:**
+
+```bash
+ollama pull qwen2.5:3b-instruct     # chat + tool calling (~2 GB)
+ollama pull bge-m3                  # embeddings, 1024-dim, multilingual
+```
+
+Set `AI_ENABLED=true` in `backend/.env` (the other defaults point at Ollama on `localhost:11434`), restart the API, then embed the seeded data once:
+
+```bash
+docker compose exec backend python -m app.scripts.embed_backfill
+```
+
+After that the worker keeps embeddings and summaries up to date. On a CPU, the assistant takes tens of seconds per answer; `ASSISTANT_TIMEOUT_S` allows for that.
+
+**Hosted, on Gemini's free tier:** use its OpenAI-compatible endpoint with an API key from Google AI Studio:
+
+```bash
+AI_ENABLED=true
+LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+LLM_API_KEY=<your key>
+LLM_MODEL=gemini-2.5-flash-lite
+EMBEDDING_MODEL=gemini-embedding-001   # truncated to 1024 dims
+```
+
+Switching embedding models means re-running `embed_backfill`, since vectors from different models can't be compared. Re-check `EMBEDDING_MIN_SIMILARITY` with the [eval script](#evaluation) too. On the web app, the AI features appear as the **Assistant** tab, natural-language search with filter chips in **Search**, and **What reviewers say** on place pages. The native app doesn't show them yet.
 
 ## Deployment
 
@@ -94,9 +146,41 @@ docker compose up -d postgres redis
 cd backend && pytest --cov
 ```
 
-92 tests (89% coverage), mostly integration tests, run against **real Postgres + PostGIS and Redis**: geography queries, full-text search, constraints and rate limits are all exercised for real, and only object storage is stubbed. They cover the moderation loop, pagination stability, refresh-token reuse detection, the routing algorithm, CSV import validation, and hostile search input.
+162 tests (90% coverage), mostly integration tests, run against **real Postgres + PostGIS + pgvector and Redis**: geography queries, full-text and vector search, constraints and rate limits are all exercised for real. Only object storage and the models are stubbed. Models are replaced by deterministic fakes (a scripted LLM and a hashed bag-of-words embedder), so no test touches the network. The tests cover the moderation loop, pagination stability, refresh-token reuse detection, the routing algorithm, CSV import validation, hostile search input, hybrid ranking and its keyword fallback, summary grounding, and the agent's limits, timeouts and recovery from bad tool calls.
 
-CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs ruff, a migration up/down/up round trip and the test suite against service containers, builds the admin dashboard, and typechecks the mobile app.
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) installs pgvector into the PostGIS service, then runs ruff, a migration up/down/up round trip, the test suite and the offline eval. It also builds the admin dashboard, typechecks the app, and builds the web bundle.
+
+## Evaluation
+
+[`backend/evals/`](backend/evals/) scores the AI features on hand-written cases over the dev seed: 20 search queries, each with the places that should come back, and 10 assistant prompts, each with the tools it should call and key arguments. It runs in its own database (`bdvisual_eval`), seeded and embedded with the chosen embedder.
+
+```bash
+cd backend
+python -m evals.run                    # offline: fake embedder + rule-based planner (CI runs this)
+python -m evals.run --provider real    # the models configured in .env
+```
+
+- **Search:** hit@3, hit@5 and MRR over the top 10, for keyword-only and hybrid ranking side by side, plus p50/p95 latency and how often hybrid fell back to keyword search.
+- **Agent:** tool-call precision and recall (harmless extra calls such as reading a place's details are allowed per case), argument accuracy (place ids are resolved to names), cases fully correct, answers passing the grounding check, failed tool calls, and p50/p95 latency. One case checks that the assistant asks where the trip starts instead of inventing an origin.
+
+Results are written to `evals/results/` as JSON and a markdown report. Search with bge-m3 on Ollama (CPU):
+
+| Mode | hit@3 | hit@5 | MRR | p50 |
+|---|---|---|---|---|
+| Keyword only | 0.90 | 0.95 | 0.86 | 7 ms |
+| Hybrid | **1.00** | **1.00** | **0.97** | 349 ms |
+
+Hybrid finds what keyword search misses when the words are only in reviews ("somewhere to go jogging", "greenhouses and a cactus house"), and it answers a Bangla query (পুরান ঢাকার বিরিয়ানি) that keyword search returns nothing for.
+
+Agent with `qwen2.5:1.5b-instruct` on Ollama (CPU). This is a smaller model than the 3B default, the largest that fit in the dev machine's free memory:
+
+| Tool precision | Tool recall | Argument accuracy | All correct | Grounded answers | Failed tool calls | p50 | p95 |
+|---|---|---|---|---|---|---|---|
+| 1.00 | 0.62 | 0.33 | 0.40 | 0.70 | 5 | 34 s | 99 s |
+
+The small model never calls a tool it shouldn't, but it often skips steps. For example, it plans a fare to "Old Dhaka" without first searching for a biryani place. It also drops the `near` area and sometimes invents a place id. The guardrails catch much of this: the 5 invalid calls went back to the model as errors instead of failing the chat, and the grounding check flagged the 3 answers that named places or fares no tool returned. These numbers are the case for a stronger model (the 3B default, or Gemini when hosted).
+
+The offline run's rule-based planner was written alongside the agent cases, so its perfect agent score only shows the harness and cases agree. On a slow CPU, raise `ASSISTANT_TIMEOUT_S` and `--embed-timeout` so slow calls aren't scored as timeouts and fallbacks.
 
 ## Project layout
 
@@ -104,9 +188,11 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs ruff, a migrati
 backend/
   app/api/v1/        routers (public + admin/)
   app/services/      business logic and queries
+  app/ai/            model providers, agent + tools, indexing, worker, call logging
   app/models/        SQLAlchemy models
   alembic/versions/  migrations
   tests/             integration tests
+  evals/             search and agent eval cases + runner
 mobile/
   app/               Expo Router screens: (auth), (tabs), place/[id], profile/[id], notifications
   components/  lib/  store/
