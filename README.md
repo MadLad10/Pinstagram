@@ -172,13 +172,16 @@ Results are written to `evals/results/` as JSON and a markdown report. Search wi
 
 Hybrid finds what keyword search misses when the words are only in reviews ("somewhere to go jogging", "greenhouses and a cactus house"), and it answers a Bangla query (পুরান ঢাকার বিরিয়ানি) that keyword search returns nothing for.
 
-Agent with `qwen2.5:1.5b-instruct` on Ollama (CPU). This is a smaller model than the 3B default, the largest that fit in the dev machine's free memory:
+Agent on Ollama (CPU), with the 3B default and a smaller 1.5B model:
 
-| Tool precision | Tool recall | Argument accuracy | All correct | Grounded answers | Failed tool calls | p50 | p95 |
-|---|---|---|---|---|---|---|---|
-| 1.00 | 0.62 | 0.33 | 0.40 | 0.70 | 5 | 34 s | 99 s |
+| Model | Tool precision | Tool recall | Argument accuracy | All correct | Grounded answers | Failed tool calls | p50 | p95 |
+|---|---|---|---|---|---|---|---|---|
+| `qwen2.5:3b-instruct` | 1.00 | 0.62 | **0.62** | **0.50** | 0.67 | 4 | 256 s | 600 s |
+| `qwen2.5:1.5b-instruct` | 1.00 | 0.62 | 0.33 | 0.40 | 0.70 | 5 | 34 s | 99 s |
 
-The small model never calls a tool it shouldn't, but it often skips steps. For example, it plans a fare to "Old Dhaka" without first searching for a biryani place. It also drops the `near` area and sometimes invents a place id. The guardrails catch much of this: the 5 invalid calls went back to the model as errors instead of failing the chat, and the grounding check flagged the 3 answers that named places or fares no tool returned. These numbers are the case for a stronger model (the 3B default, or Gemini when hosted).
+Neither model calls a tool it shouldn't, but both often skip steps. The 1.5B model plans a fare to "Old Dhaka" without first searching for a biryani place, drops the `near` area and sometimes invents a place id. The 3B model fills in arguments far more accurately and chains search → fare correctly, but it still stops after `search_places` when a question needs `get_place_details` (opening hours, reviews), and it answered one multi-step prompt without calling any tool. The guardrails catch much of this. Invalid calls (4 and 5) went back to the model as errors instead of failing the chat. The grounding check flagged the 3 answers from each model that quoted fares or places no tool returned.
+
+The 3B run shared a CPU host with other workloads. One case hit the 600 s assistant timeout, which sets the p95. The machine also had no room for the embedding model at query time, so `search_places` fell back to keyword search for that run. These numbers are the case for a stronger hosted model (Gemini's free tier).
 
 The offline run's rule-based planner was written alongside the agent cases, so its perfect agent score only shows the harness and cases agree. On a slow CPU, raise `ASSISTANT_TIMEOUT_S` and `--embed-timeout` so slow calls aren't scored as timeouts and fallbacks.
 
