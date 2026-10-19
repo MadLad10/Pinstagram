@@ -71,6 +71,45 @@ class Settings(BaseSettings):
     # Admin password used by the seed script; required in production.
     ADMIN_PASSWORD: str = ""
 
+    # AI features (hybrid search, review summaries, trip assistant). Any
+    # OpenAI-compatible endpoint works: Ollama locally (free), or Gemini's free
+    # tier at https://generativelanguage.googleapis.com/v1beta/openai.
+    AI_ENABLED: bool = False
+    LLM_BASE_URL: str = "http://localhost:11434/v1"
+    LLM_API_KEY: str = ""
+    LLM_MODEL: str = "qwen2.5:3b-instruct"
+    LLM_TIMEOUT_S: float = 60
+    # Free-tier calls are logged at $0; the list price is logged alongside so
+    # you can see what the same traffic would cost on a paid plan.
+    LLM_FREE_TIER: bool = True
+    # Optional JSON overrides for the price table, USD per 1M tokens:
+    # {"my-model": [input_price, output_price]}
+    LLM_PRICES: str = ""
+    # Embeddings default to the chat endpoint and key when left empty.
+    EMBEDDING_BASE_URL: str = ""
+    EMBEDDING_API_KEY: str = ""
+    # Must return at least 1024 dimensions (the schema's vector size). bge-m3
+    # (Ollama) is exactly 1024 and multilingual, so Bangla reviews embed well.
+    # Longer embeddings from Matryoshka models such as gemini-embedding-001 are
+    # truncated and re-normalized, which those models are trained to support.
+    EMBEDDING_MODEL: str = "bge-m3"
+    # Cosine similarity below which a vector match is treated as noise. Depends
+    # on the model; tune it with the eval script.
+    EMBEDDING_MIN_SIMILARITY: float = 0.45
+    # Task prefixes for models that expect them (nomic-embed-text uses
+    # "search_query: " / "search_document: "); bge-m3 and Gemini need none.
+    EMBEDDING_QUERY_PREFIX: str = ""
+    EMBEDDING_DOC_PREFIX: str = ""
+    AI_WORKER_ENABLED: bool = True
+    AI_WORKER_INTERVAL_S: int = 60
+    # Trip-planning assistant. Local CPU models are slow, hence the generous
+    # request timeout; hosted models finish well inside it.
+    ASSISTANT_MAX_STEPS: int = 6
+    ASSISTANT_TOOL_TIMEOUT_S: float = 8
+    ASSISTANT_TIMEOUT_S: float = 90
+    # Per user per day (Dhaka time), counted from llm_calls. 0 = unlimited.
+    ASSISTANT_DAILY_TOKENS: int = 60_000
+
     ENV: str = "local"
 
     @field_validator("DATABASE_URL")
@@ -87,6 +126,14 @@ class Settings(BaseSettings):
         return (
             self.MEDIA_BASE_URL.rstrip("/") or f"{self.s3_public_base}/{self.S3_BUCKET}"
         )
+
+    @property
+    def embedding_base_url(self) -> str:
+        return self.EMBEDDING_BASE_URL or self.LLM_BASE_URL
+
+    @property
+    def embedding_api_key(self) -> str:
+        return self.EMBEDDING_API_KEY or self.LLM_API_KEY
 
     @property
     def cors_origins(self) -> list[str]:

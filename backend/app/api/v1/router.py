@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    assistant,
     auth,
     directions,
     feed,
@@ -28,6 +29,7 @@ for module in (
     directions,
     reports,
     notifications,
+    assistant,
 ):
     router.include_router(module.router)
 router.include_router(admin_router)

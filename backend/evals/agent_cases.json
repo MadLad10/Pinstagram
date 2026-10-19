@@ -1,0 +1,86 @@
+[
+  {
+    "id": "biryani-from-mirpur",
+    "prompt": "Cheapest way from Mirpur 10 to a good biryani place in Old Dhaka",
+    "expected_tools": [
+      {"name": "search_places", "args": {"query": ["biryani"], "near": ["old dhaka", "puran dhaka", "nazira"]}},
+      {"name": "get_fare", "args": {"origin": ["mirpur 10"], "place": ["biryani"]}}
+    ],
+    "allowed_tools": ["get_place_details", "get_bus_route", "get_ridehail_estimate"]
+  },
+  {
+    "id": "quiet-cafe-dhanmondi",
+    "prompt": "A quiet cafe in Dhanmondi with good wifi",
+    "expected_tools": [
+      {"name": "search_places", "args": {"near": ["dhanmondi"]}}
+    ],
+    "allowed_tools": ["get_place_details"]
+  },
+  {
+    "id": "bus-to-lalbagh",
+    "prompt": "Which bus do I take from Farmgate to Lalbagh Fort?",
+    "expected_tools": [
+      {"name": "get_bus_route", "args": {"origin": ["farmgate"], "place": ["lalbagh"]}}
+    ],
+    "allowed_tools": ["search_places", "get_place_details", "get_fare"]
+  },
+  {
+    "id": "uber-to-hatirjheel",
+    "prompt": "How much is an Uber from Gulshan 2 to Hatirjheel Lake?",
+    "expected_tools": [
+      {"name": "get_ridehail_estimate", "args": {"origin": ["gulshan"], "place": ["hatirjheel"]}}
+    ],
+    "allowed_tools": ["search_places", "get_fare"]
+  },
+  {
+    "id": "ahsan-manzil-hours",
+    "prompt": "Is Ahsan Manzil open on Thursdays?",
+    "expected_tools": [
+      {"name": "get_place_details", "args": {"place": ["ahsan manzil"]}}
+    ],
+    "allowed_tools": ["search_places"]
+  },
+  {
+    "id": "tehari-reviews",
+    "prompt": "Find me a cheap tehari place in Old Dhaka and tell me what people say about it",
+    "expected_tools": [
+      {"name": "search_places", "args": {"query": ["tehari"]}},
+      {"name": "get_place_details", "args": {"place": ["tehari"]}}
+    ],
+    "allowed_tools": []
+  },
+  {
+    "id": "fastest-to-parliament",
+    "prompt": "I'm at Shahbag. What's the fastest way to get to the National Parliament House?",
+    "expected_tools": [
+      {"name": "get_fare", "args": {"origin": ["shahbag"], "place": ["parliament"]}}
+    ],
+    "allowed_tools": ["search_places", "get_bus_route", "get_ridehail_estimate"]
+  },
+  {
+    "id": "no-origin",
+    "prompt": "How do I get to Star Mosque cheaply?",
+    "expected_tools": [],
+    "allowed_tools": ["search_places", "get_place_details"],
+    "note": "the start is unknown: the assistant should ask, not invent an origin"
+  },
+  {
+    "id": "board-games-from-here",
+    "prompt": "Take me to a cafe with board games, starting from here",
+    "location": [23.7940, 90.4043],
+    "expected_tools": [
+      {"name": "search_places", "args": {"query": ["board game"]}},
+      {"name": "get_fare", "args": {"origin": ["current location", "here"], "place": ["banani book", "mirpur social"]}}
+    ],
+    "allowed_tools": ["get_place_details", "get_bus_route", "get_ridehail_estimate"]
+  },
+  {
+    "id": "rooftop-bus-from-mohakhali",
+    "prompt": "Suggest a rooftop cafe in Dhanmondi for the sunset, and which bus to take there from Mohakhali",
+    "expected_tools": [
+      {"name": "search_places", "args": {"query": ["rooftop"], "near": ["dhanmondi"]}},
+      {"name": "get_bus_route", "args": {"origin": ["mohakhali"], "place": ["cloud nine"]}}
+    ],
+    "allowed_tools": ["get_place_details", "get_fare"]
+  }
+]

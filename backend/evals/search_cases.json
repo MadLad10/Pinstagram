@@ -1,0 +1,107 @@
+[
+  {
+    "id": "work-cafe",
+    "query": "quiet cafe where I can work on my laptop",
+    "expected": ["Paper & Pour", "Cloud Nine Rooftop Cafe", "Banani Book Cafe", "Uttara Bean Co."],
+    "note": "only reviews say 'quiet' and 'laptop'"
+  },
+  {
+    "id": "old-dhaka-biryani",
+    "query": "cheap biryani in old dhaka",
+    "expected": ["Old Dhaka Biryani House"]
+  },
+  {
+    "id": "kacchi",
+    "query": "mutton kacchi",
+    "expected": ["Kacchi Ghor"]
+  },
+  {
+    "id": "sunset-rooftop",
+    "query": "rooftop with a sunset view",
+    "expected": ["Cloud Nine Rooftop Cafe", "Lakeview Rooftop"]
+  },
+  {
+    "id": "board-games",
+    "query": "play board games with friends",
+    "expected": ["Banani Book Cafe", "Mirpur Social Cafe"]
+  },
+  {
+    "id": "airport-hotel",
+    "query": "hotel near the airport for an early flight",
+    "expected": ["Airport Garden Inn"]
+  },
+  {
+    "id": "mughal-fort",
+    "query": "mughal fort",
+    "expected": ["Lalbagh Fort"]
+  },
+  {
+    "id": "pink-palace",
+    "query": "pink palace museum by the river",
+    "expected": ["Ahsan Manzil"]
+  },
+  {
+    "id": "late-kebab",
+    "query": "late night kebabs",
+    "expected": ["Chankharpul Kebab House"]
+  },
+  {
+    "id": "morning-tehari",
+    "query": "tehari breakfast on banana leaves",
+    "expected": ["Puran Dhaka Tehari Ghar"]
+  },
+  {
+    "id": "chittagong-beef",
+    "query": "spicy Chittagong style beef",
+    "expected": ["Mezban Bari"]
+  },
+  {
+    "id": "tea-stall",
+    "query": "milk tea and singara",
+    "expected": ["Tong Tea Corner"]
+  },
+  {
+    "id": "jogging",
+    "query": "somewhere to go jogging in the morning",
+    "expected": ["Gulshan Lake Park", "Dhanmondi Lake", "Ramna Park"],
+    "note": "jogging is only in reviews"
+  },
+  {
+    "id": "kahn",
+    "query": "Louis Kahn architecture",
+    "expected": ["National Parliament House"]
+  },
+  {
+    "id": "water-taxi",
+    "query": "water taxi and evening light show",
+    "expected": ["Hatirjheel Lake"]
+  },
+  {
+    "id": "pool-buffet",
+    "query": "hotel with a pool and a big breakfast buffet",
+    "expected": ["Hotel Shapla Grand"]
+  },
+  {
+    "id": "greenhouses",
+    "query": "gardens with greenhouses and a cactus house",
+    "expected": ["National Botanical Garden"]
+  },
+  {
+    "id": "coffee-in-dhanmondi",
+    "query": "good coffee",
+    "filters": {"area": "Dhanmondi"},
+    "expected": ["Cloud Nine Rooftop Cafe", "Paper & Pour"]
+  },
+  {
+    "id": "budget-wifi",
+    "query": "wifi and power outlets",
+    "filters": {"price_tier": "budget"},
+    "expected": ["Paper & Pour"]
+  },
+  {
+    "id": "bangla-biryani",
+    "query": "পুরান ঢাকার বিরিয়ানি",
+    "expected": ["Old Dhaka Biryani House", "Kacchi Ghor"],
+    "note": "Bangla query over English text; needs a multilingual embedder"
+  }
+]

@@ -11,13 +11,14 @@ restaurants and hotels are fictional so no real business gets fake reviews.
 Images are placeholders from picsum.photos.
 """
 
+import argparse
 import asyncio
 import random
 import secrets
 from datetime import UTC, datetime, time, timedelta
 
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.core.config import settings
 from app.core.security import hash_password
@@ -34,6 +35,7 @@ from app.models.transport import (
     TransportFare,
 )
 from app.models.user import User
+from app.scripts.seed_reviews import PLACE_REVIEWS, REVIEWERS
 from app.services.reviews_service import recompute_place_rating
 from app.services.uploads_service import ensure_bucket_exists
 
@@ -250,6 +252,56 @@ PLACES = [
         ["parking", "ac", "wifi"],
         "Comfortable stopover hotel with free airport shuttle.",
     ),
+    (
+        "Cloud Nine Rooftop Cafe",
+        "cafe",
+        "Dhanmondi",
+        23.7510,
+        90.3755,
+        "mid",
+        ["wifi", "outdoor_seating"],
+        "Rooftop cafe on Satmasjid Road with fairy lights, pour-over coffee and a view over Dhanmondi Lake.",
+    ),
+    (
+        "Paper & Pour",
+        "cafe",
+        "Dhanmondi",
+        23.7440,
+        90.3790,
+        "budget",
+        ["wifi", "ac"],
+        "Library-style cafe with long tables, power outlets and a quiet zone upstairs.",
+    ),
+    (
+        "Chankharpul Kebab House",
+        "restaurant",
+        "Chankharpul",
+        23.7225,
+        90.3960,
+        "budget",
+        [],
+        "Charcoal-grilled sheek and boti kebabs with fresh naan, open late.",
+    ),
+    (
+        "Puran Dhaka Tehari Ghar",
+        "restaurant",
+        "Nazira Bazar",
+        23.7195,
+        90.4045,
+        "budget",
+        [],
+        "Beef tehari cooked in mustard oil, served on banana leaves from the morning rush.",
+    ),
+    (
+        "Mirpur Social Cafe",
+        "cafe",
+        "Mirpur",
+        23.8060,
+        90.3680,
+        "mid",
+        ["wifi", "ac", "parking"],
+        "Two-storey cafe by the Mirpur 10 roundabout with board games and big group tables.",
+    ),
 ]
 
 BUS_STOPS = {
@@ -434,6 +486,7 @@ USERS = [
     ("rafi@pinstagram.app", "Rafi Chowdhury", "Weekend cyclist, lake chaser.", "user"),
     ("admin@pinstagram.app", "Pinstagram Admin", None, "admin"),
 ]
+USERS += REVIEWERS
 DEMO_PASSWORD = "demo1234"
 
 CAPTIONS = {
@@ -467,14 +520,6 @@ CAPTIONS = {
     ],
 }
 
-REVIEW_BODIES = [
-    "Went on a weekday afternoon and it was calm and clean. Staff were friendly and helpful, would come back.",
-    "Busy on Friday evening, so come early. The atmosphere makes up for the wait and prices are fair.",
-    "Lovely spot for photos, especially around sunset. Parking is a hassle so take a rickshaw from the main road.",
-    "Decent overall. A few things could be better maintained but it is still worth a visit if you are nearby.",
-    "One of my favourite places in Dhaka. Great for taking visiting friends and family, never disappoints.",
-]
-
 
 def _password_for(email: str, role: str, admin_password: str, production: bool) -> str:
     """Only the shared demo login is public. On a public deployment the other
@@ -486,7 +531,50 @@ def _password_for(email: str, role: str, admin_password: str, production: bool) 
     return secrets.token_urlsafe(24)
 
 
-async def seed() -> None:
+async def _seed_reviews(db, users, places, now, *, reset: bool) -> None:
+    """Place-specific published reviews, one per (reviewer, place). The demo
+    account never gets one, so visitors can still write their own."""
+    reviewers = [
+        u
+        for e, u in users.items()
+        if u.role != "admin" and e != settings.DEMO_USER_EMAIL
+    ]
+    if reset:
+        result = await db.execute(
+            delete(Review).where(Review.user_id.in_([u.id for u in reviewers]))
+        )
+        print(f"  removed {result.rowcount} seeded reviews")
+    existing = set(
+        tuple(row) for row in await db.execute(select(Review.user_id, Review.place_id))
+    )
+    added = 0
+    for i, (name, reviews) in enumerate(PLACE_REVIEWS.items()):
+        place = places[name]
+        for j, (rating, body) in enumerate(reviews):
+            author = reviewers[(i + j) % len(reviewers)]
+            if (author.id, place.id) in existing:
+                continue
+            created = now - timedelta(days=3 * j + i % 5, hours=i)
+            db.add(
+                Review(
+                    user_id=author.id,
+                    place_id=place.id,
+                    rating=rating,
+                    body=body,
+                    status="published",
+                    created_at=created,
+                    updated_at=created,
+                )
+            )
+            added += 1
+    await db.flush()
+    for place in places.values():
+        await recompute_place_rating(db, place.id)
+    if added:
+        print(f"  {added} reviews")
+
+
+async def seed(reset_reviews: bool = False) -> None:
     production = settings.ENV == "production"
     if production and not settings.ADMIN_PASSWORD:
         raise SystemExit("Set ADMIN_PASSWORD before seeding a public deployment.")
@@ -699,24 +787,6 @@ async def seed() -> None:
                     )
                 post.comment_count = len(commenters)
 
-            for place in places.values():
-                for u in rng.sample(people, rng.randint(2, 4)):
-                    db.add(
-                        Review(
-                            user_id=u.id,
-                            place_id=place.id,
-                            rating=rng.choice([3, 4, 4, 5, 5]),
-                            body=rng.choice(REVIEW_BODIES),
-                            status="published",
-                            price_paid=rng.choice([None, 200, 500])
-                            if place.category in ("cafe", "restaurant")
-                            else None,
-                        )
-                    )
-            await db.flush()
-            for place in places.values():
-                await recompute_place_rating(db, place.id)
-
             demo = users["demo@pinstagram.app"]
             for name in ("Lalbagh Fort", "Cafe Mango", "Hatirjheel Lake"):
                 db.add(
@@ -725,7 +795,9 @@ async def seed() -> None:
                     )
                 )
                 places[name].save_count += 1
-            print(f"  {len(posts)} posts, likes, comments, reviews")
+            print(f"  {len(posts)} posts, likes, comments")
+
+        await _seed_reviews(db, users, places, now, reset=reset_reviews)
 
         await db.commit()
 
@@ -737,4 +809,10 @@ async def seed() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(seed())
+    parser = argparse.ArgumentParser(description="Seed local demo data.")
+    parser.add_argument(
+        "--reset-reviews",
+        action="store_true",
+        help="replace reviews written by seed users (e.g. after the review text changes)",
+    )
+    asyncio.run(seed(reset_reviews=parser.parse_args().reset_reviews))

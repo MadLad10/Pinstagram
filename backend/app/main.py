@@ -1,5 +1,6 @@
+import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
+from app.ai import worker as ai_worker
 from app.api.v1.router import router as v1_router
 from app.core.config import settings
 from app.core.rate_limit import RateLimitMiddleware, close_redis, get_redis
@@ -17,7 +19,14 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    worker = None
+    if settings.AI_ENABLED and settings.AI_WORKER_ENABLED:
+        worker = asyncio.create_task(ai_worker.run_worker(), name="ai-worker")
     yield
+    if worker:
+        worker.cancel()
+        with suppress(asyncio.CancelledError):
+            await worker
     await close_redis()
     await engine.dispose()
 

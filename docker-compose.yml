@@ -1,6 +1,7 @@
 services:
   postgres:
-    image: postgis/postgis:15-3.3
+    build: ./docker/postgres
+    image: pinstagram-postgres:15-3.3-pgvector
     environment:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app
