@@ -444,7 +444,8 @@ TOOLS: dict[str, Tool] = {
         _tool(
             "search_places",
             "Find places in Dhaka by what the user wants (food, vibe, amenities), "
-            "optionally near an area. Returns place_ids to use with other tools.",
+            "optionally near an area. Returns place_ids to use with other tools. "
+            "Results have no opening hours or reviews: use get_place_details.",
             SearchPlacesArgs,
             search_places,
         ),
