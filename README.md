@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/MadLad10/Pinstagram/actions/workflows/ci.yml/badge.svg)](https://github.com/MadLad10/Pinstagram/actions/workflows/ci.yml)
 
-**Live demo:** _add your Vercel URL here_. Click **Try the demo account** (the first load can take ~1 min while the free API instance wakes up).
+**Live demo:** https://pinstagram-mobile.vercel.app. Click **Try the demo account** (the first load can take ~1 min while the free API instance wakes up).
 
 A place-discovery app for Bangladesh: an Instagram-style feed of real places, a map, reviews, and **practical "how do I get there" directions**: which bus to take and what it costs, ride-hail estimates for Uber, Pathao and Obhai, train times, or whether it's walkable.
 
