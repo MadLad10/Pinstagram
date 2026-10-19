@@ -8,25 +8,39 @@ A place-discovery app for Bangladesh: an Instagram-style feed of real places, a 
 
 > "Show me a cafe in Banani, and tell me I can take the *Airport Road Express* from Mohakhali for ৳20 (about 30 min), or a Pathao for ~৳180."
 
-On top of that sit three AI features that run on free models (Ollama locally, Gemini's free tier when hosted): **natural-language place search** ("quiet cafe where I can work on my laptop"), **review summaries** where every point cites its reviews, and a **trip-planning assistant** that answers only from the app's own places, routes and fares.
+On top of that sit three generative AI features built on large language models (LLMs), running on free models (Ollama locally, Google Gemini's free tier in production):
 
-Three apps share one API:
+- **Hybrid semantic search:** vector search over embeddings in pgvector, merged with full-text search ("quiet cafe where I can work on my laptop").
+- **Review summaries with Retrieval-Augmented Generation (RAG):** every point cites the reviews it came from, and the citations are verified in code.
+- **An agentic trip-planning assistant:** an AI agent that uses LLM tool calling (function calling) and answers only from the app's own places, routes and fares.
+
+Three apps share one REST API:
 
 | | Stack |
 |---|---|
-| **API** (`backend/`) | FastAPI · SQLAlchemy 2.0 async · PostgreSQL 15 + PostGIS · Redis · Alembic |
-| **App** (`mobile/`): iOS, Android and web | React Native · Expo SDK 57 · Expo Router · TanStack Query · Zustand · NativeWind · Leaflet on web |
-| **Admin dashboard** (`admin/`) | Next.js 14 · Tailwind |
+| **API** (`backend/`) | Python 3.12 · FastAPI · asyncio · SQLAlchemy 2.0 async · Pydantic · PostgreSQL + PostGIS + pgvector · Redis · Alembic |
+| **App** (`mobile/`): iOS, Android and web | TypeScript · React Native · Expo SDK 57 · Expo Router · TanStack Query · Zustand · NativeWind · Leaflet on web |
+| **Admin dashboard** (`admin/`) | TypeScript · Next.js 14 · React · Tailwind CSS |
+| **AI / LLM** | Google Gemini (`gemini-3.5-flash-lite`, `gemini-embedding-001`) · Ollama (Qwen 2.5, bge-m3) · OpenAI-compatible API |
+| **Infrastructure** | Docker · GitHub Actions CI/CD · Render · Vercel · Neon (serverless Postgres) · Upstash Redis |
+
+### Skills demonstrated
+
+- **AI engineering:** Retrieval-Augmented Generation (RAG), AI agents, tool calling / function calling, embeddings, vector database (pgvector, HNSW index), semantic search, hybrid search with Reciprocal Rank Fusion, prompt engineering, LLM guardrails and hallucination checks (grounding), LLM evaluation (evals), LLM observability (token, latency and cost logging), streaming with Server-Sent Events (SSE), multilingual NLP (Bangla)
+- **Backend:** REST API design, OpenAPI, async Python, JWT authentication with refresh-token rotation, Argon2, role-based access control, rate limiting, background workers, presigned S3 uploads
+- **Data:** PostgreSQL, SQL, PostGIS geospatial queries, full-text search (`tsvector`, GIN), fuzzy search (`pg_trgm`), database migrations, keyset pagination, Redis
+- **Frontend:** React Native, React, Next.js, TypeScript, cross-platform (iOS, Android, web)
+- **DevOps and quality:** Docker, CI/CD with GitHub Actions, cloud deployment, integration testing with pytest (90% coverage), Ruff linting, type checking
 
 ## Highlights
 
 ### AI features
 
-- **Hybrid search on pgvector.** Places and published reviews are embedded (bge-m3, 1024 dimensions, multilingual so Bangla works) into HNSW indexes. A query is matched semantically against both, and by keyword against the weighted `tsvector`, amenities and trigram name similarity. The two rankings are merged with Reciprocal Rank Fusion, then nudged by area, category and distance. Filters are hard constraints inside each query. Search finds a cafe for "laptop" because its *reviews* say so, shows the matching review as the reason, and falls back to keyword ranking if the embedder is down. ([`hybrid_search_service.py`](backend/app/services/hybrid_search_service.py))
-- **Grounded review summaries.** Pros, cons and "best for", generated in the background from published reviews only. The model must cite the reviews behind every point, and grounding is enforced in code: a point is dropped if it cites nothing, cites a review it wasn't shown, quotes a number (price, time) its reviews don't contain, or shares no content words with them. The API returns each point's review ids. A worker regenerates summaries after new reviews arrive, or immediately if a cited review is unpublished. ([`summary_service.py`](backend/app/services/summary_service.py))
-- **Trip-planning agent.** A tool-calling loop (search, place details, fares, bus routes, ride-hail) streamed over Server-Sent Events. It has a step limit, per-tool timeouts, invalid tool arguments returned to the model as errors it can recover from, and a request deadline. After answering, a grounding check flags any place the tools didn't return and any fare not in a tool result. Per-user rate limits and a daily token budget apply. ([`agent.py`](backend/app/ai/agent.py), [`tools.py`](backend/app/ai/tools.py))
-- **One provider layer, every call logged.** A single httpx client for any OpenAI-compatible endpoint (Ollama, Gemini, OpenAI, Groq). Every call is written to `llm_calls` with tokens, latency, status and cost: $0 on free tiers, alongside what the same traffic would cost at list price. ([`app/ai/`](backend/app/ai/))
-- **Measured, not eyeballed.** An eval script scores search ranking and the agent's tool use on hand-written cases ([Evaluation](#evaluation)).
+- **Hybrid semantic search (vector + keyword) on pgvector.** Places and published reviews are embedded (bge-m3, 1024 dimensions, multilingual so Bangla works) into HNSW indexes. A query is matched semantically against both, and by keyword against the weighted `tsvector`, amenities and trigram name similarity. The two rankings are merged with Reciprocal Rank Fusion, then nudged by area, category and distance. Filters are hard constraints inside each query. Search finds a cafe for "laptop" because its *reviews* say so, shows the matching review as the reason, and falls back to keyword ranking if the embedder is down. ([`hybrid_search_service.py`](backend/app/services/hybrid_search_service.py))
+- **Grounded review summaries (RAG with citation checks).** Pros, cons and "best for", generated in the background from published reviews only. The model must cite the reviews behind every point, and grounding is enforced in code: a point is dropped if it cites nothing, cites a review it wasn't shown, quotes a number (price, time) its reviews don't contain, or shares no content words with them. The API returns each point's review ids. A worker regenerates summaries after new reviews arrive, or immediately if a cited review is unpublished. ([`summary_service.py`](backend/app/services/summary_service.py))
+- **Trip-planning AI agent (LLM tool calling).** A multi-step tool-calling loop (search, place details, fares, bus routes, ride-hail) streamed over Server-Sent Events. It has a step limit, per-tool timeouts, invalid tool arguments returned to the model as errors it can recover from, and a request deadline. After answering, a grounding check flags any place the tools didn't return and any fare not in a tool result. Per-user rate limits and a daily token budget apply. ([`agent.py`](backend/app/ai/agent.py), [`tools.py`](backend/app/ai/tools.py))
+- **LLM provider abstraction and observability.** A single httpx client for any OpenAI-compatible endpoint (Ollama, Gemini, OpenAI, Groq). Every call is written to `llm_calls` with tokens, latency, status and cost: $0 on free tiers, alongside what the same traffic would cost at list price. ([`app/ai/`](backend/app/ai/))
+- **LLM evaluation: measured, not eyeballed.** An eval script scores search ranking and the agent's tool use on hand-written cases ([Evaluation](#evaluation)).
 
 ### Core app
 
@@ -135,9 +149,11 @@ Switching embedding models means re-running `embed_backfill`, since vectors from
 
 ## Deployment
 
-The web build of the app is hosted on Vercel; the API, Postgres/PostGIS, Redis and
-images run on Render, Neon, Upstash and Cloudflare R2 free tiers. Step-by-step:
-[DEPLOY.md](DEPLOY.md). The same codebase serves native and web: platform-specific
+The web build of the app is hosted on Vercel. The Dockerized API runs on Render, with
+PostgreSQL/PostGIS/pgvector on Neon, Redis on Upstash, and the LLM on Gemini's free tier.
+Photo uploads to Cloudflare R2 are optional. GitHub Actions runs CI on every pull request
+and on `main`, and every push to `main` redeploys both services automatically.
+Step-by-step: [DEPLOY.md](DEPLOY.md). The same codebase serves native and web: platform-specific
 modules (`PlacesMap.web.tsx` with Leaflet, a web token store, browser dialogs) are
 picked at build time by Metro.
 
@@ -148,7 +164,7 @@ docker compose up -d postgres redis
 cd backend && pytest --cov
 ```
 
-162 tests (90% coverage), mostly integration tests, run against **real Postgres + PostGIS + pgvector and Redis**: geography queries, full-text and vector search, constraints and rate limits are all exercised for real. Only object storage and the models are stubbed. Models are replaced by deterministic fakes (a scripted LLM and a hashed bag-of-words embedder), so no test touches the network. The tests cover the moderation loop, pagination stability, refresh-token reuse detection, the routing algorithm, CSV import validation, hostile search input, hybrid ranking and its keyword fallback, summary grounding, and the agent's limits, timeouts and recovery from bad tool calls.
+163 tests (90% coverage), mostly integration tests, run against **real Postgres + PostGIS + pgvector and Redis**: geography queries, full-text and vector search, constraints and rate limits are all exercised for real. Only object storage and the models are stubbed. Models are replaced by deterministic fakes (a scripted LLM and a hashed bag-of-words embedder), so no test touches the network. The tests cover the moderation loop, pagination stability, refresh-token reuse detection, the routing algorithm, CSV import validation, hostile search input, hybrid ranking and its keyword fallback, summary grounding, and the agent's limits, timeouts and recovery from bad tool calls.
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) installs pgvector into the PostGIS service, then runs ruff, a migration up/down/up round trip, the test suite and the offline eval. It also builds the admin dashboard, typechecks the app, and builds the web bundle.
 
