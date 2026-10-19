@@ -37,6 +37,9 @@ class ToolCall:
     # reported back to it.
     raw_arguments: str = ""
     arguments_valid: bool = True
+    # Provider data that must be echoed back with the call, e.g. Gemini 3's
+    # thought_signature (requests without it are rejected).
+    extra_content: dict | None = None
 
 
 @dataclass
@@ -67,6 +70,7 @@ class ChatResult:
                         "name": tc.name,
                         "arguments": tc.raw_arguments or json.dumps(tc.arguments),
                     },
+                    **({"extra_content": tc.extra_content} if tc.extra_content else {}),
                 }
                 for tc in self.tool_calls
             ]
@@ -96,17 +100,32 @@ class LLMTimeout(LLMError):
     pass
 
 
-def parse_tool_arguments(call_id: str, name: str, raw: str | dict | None) -> ToolCall:
+def parse_tool_arguments(
+    call_id: str,
+    name: str,
+    raw: str | dict | None,
+    extra_content: dict | None = None,
+) -> ToolCall:
     if isinstance(raw, dict):  # some servers send an object, not a string
         return ToolCall(
-            id=call_id, name=name, arguments=raw, raw_arguments=json.dumps(raw)
+            id=call_id,
+            name=name,
+            arguments=raw,
+            raw_arguments=json.dumps(raw),
+            extra_content=extra_content,
         )
     raw = raw or "{}"
     try:
         args = json.loads(raw)
         if not isinstance(args, dict):
             raise ValueError("arguments must be an object")
-        return ToolCall(id=call_id, name=name, arguments=args, raw_arguments=raw)
+        return ToolCall(
+            id=call_id,
+            name=name,
+            arguments=args,
+            raw_arguments=raw,
+            extra_content=extra_content,
+        )
     except ValueError:
         return ToolCall(
             id=call_id,
@@ -114,6 +133,7 @@ def parse_tool_arguments(call_id: str, name: str, raw: str | dict | None) -> Too
             arguments={},
             raw_arguments=raw,
             arguments_valid=False,
+            extra_content=extra_content,
         )
 
 

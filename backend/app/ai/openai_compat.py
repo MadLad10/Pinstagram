@@ -128,6 +128,7 @@ class OpenAICompatLLM(LLMProvider):
                 tc.get("id") or f"call_{i}",
                 tc["function"]["name"],
                 tc["function"].get("arguments"),
+                tc.get("extra_content"),
             )
             for i, tc in enumerate(message.get("tool_calls") or [])
         ]
@@ -197,6 +198,8 @@ class OpenAICompatLLM(LLMProvider):
                                     {"id": "", "name": "", "arguments": ""},
                                 )
                                 slot["id"] = frag.get("id") or slot["id"]
+                                if frag.get("extra_content"):
+                                    slot["extra_content"] = frag["extra_content"]
                                 fn = frag.get("function") or {}
                                 slot["name"] += fn.get("name") or ""
                                 args = fn.get("arguments")
@@ -213,7 +216,12 @@ class OpenAICompatLLM(LLMProvider):
         yield ChatResult(
             content=text,
             tool_calls=[
-                parse_tool_arguments(c["id"] or f"call_{i}", c["name"], c["arguments"])
+                parse_tool_arguments(
+                    c["id"] or f"call_{i}",
+                    c["name"],
+                    c["arguments"],
+                    c.get("extra_content"),
+                )
                 for i, c in sorted(calls.items())
             ],
             usage=_usage(usage_raw, messages, text),

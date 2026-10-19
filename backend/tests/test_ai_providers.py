@@ -164,6 +164,48 @@ async def test_stream_assembles_fragmented_tool_calls():
     assert (row.input_tokens, row.output_tokens, row.status) == (50, 7, "ok")
 
 
+async def test_gemini_thought_signature_is_sent_back_with_the_call():
+    # Gemini 3 rejects the follow-up request unless each tool call carries
+    # back the extra_content it was returned with.
+    extra = {"google": {"thought_signature": "sig=="}}
+    chunk = {
+        "choices": [
+            {
+                "delta": {
+                    "tool_calls": [
+                        {
+                            "id": "c1",
+                            "type": "function",
+                            "function": {
+                                "name": "search_places",
+                                "arguments": '{"query": "x"}',
+                            },
+                            "extra_content": extra,
+                        }
+                    ]
+                },
+                "finish_reason": "tool_calls",
+            }
+        ]
+    }
+    body = f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n"
+
+    def handler(request):
+        return httpx.Response(
+            200, text=body, headers={"content-type": "text/event-stream"}
+        )
+
+    events = [
+        e
+        async for e in _llm(handler).stream(
+            [{"role": "user", "content": "hi"}], purpose="test", tools=[TOOL]
+        )
+    ]
+    [call] = events[-1].as_message()["tool_calls"]
+    assert call["extra_content"] == extra
+    assert call["function"]["arguments"] == '{"query": "x"}'
+
+
 async def test_missing_usage_is_estimated():
     def handler(request):
         return httpx.Response(
