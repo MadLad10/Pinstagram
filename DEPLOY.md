@@ -10,6 +10,7 @@ free tiers of other services, because Vercel only serves the frontend:
 | Postgres + PostGIS | Neon | 0.5 GB |
 | Redis (rate limits) | Upstash | 10k commands/day |
 | Image storage | Cloudflare R2 | 10 GB, no egress fees |
+| AI (chat + embeddings) | Gemini API | Free tier: a few requests a minute |
 
 Allow 30–45 minutes. Do the steps in order, because later steps need values from earlier ones.
 Keep a scratch file open to collect the values marked **→ save**.
@@ -39,7 +40,7 @@ PostGIS and pg_trgm are enabled automatically by the first migration.
 1. In the Cloudflare dashboard → **R2** → **Create bucket** named `pinstagram-media`.
 2. Open the bucket → **Settings** → **Public access** → enable the **r2.dev subdomain**.
    **→ save the public URL as `MEDIA_BASE_URL`** (e.g. `https://pub-abc123.r2.dev`).
-3. Same settings page → **CORS policy** → paste this (put in your Vercel URL after step 5;
+3. Same settings page → **CORS policy** → paste this (put in your Vercel URL after step 6;
    `*` is fine to start):
    ```json
    [
@@ -59,12 +60,30 @@ PostGIS and pg_trgm are enabled automatically by the first migration.
 > No R2 yet? Skip this step and set `UPLOADS_ENABLED=false` on the API. Everything
 > except posting new photos works, and the app explains why uploads are off.
 
-## 4. Render (API)
+## 4. Gemini (AI features)
+
+1. At https://aistudio.google.com/apikey, click **Create API key**.
+   **→ save as `LLM_API_KEY`**
+2. List the models your key can use. The free tier changes over time, and new
+   projects may not get older models:
+   ```bash
+   curl -s https://generativelanguage.googleapis.com/v1beta/openai/models \
+     -H "Authorization: Bearer <LLM_API_KEY>" | grep '"id"'
+   ```
+   Pick the newest **Flash-Lite** model, or **Flash** if there's no Flash-Lite. Flash-Lite
+   allows the most free requests per day.
+   **→ save its id, without the `models/` prefix, as `LLM_MODEL`**
+   Check that `gemini-embedding-001` is also listed.
+
+The free tier allows only a few requests a minute. One assistant answer can take
+several calls, so a busy minute returns "the assistant is busy" instead of an answer.
+
+## 5. Render (API)
 
 1. Sign up at https://render.com with GitHub → **New** → **Blueprint** → select the
    `Pinstagram` repo. Render reads [`render.yaml`](render.yaml).
 2. Fill in the prompted values from your scratch file. For `CORS_ORIGINS`, use
-   `https://pinstagram.vercel.app` for now; you'll correct it in step 6. Choose a strong
+   `https://pinstagram.vercel.app` for now; you'll correct it in step 7. Choose a strong
    **`ADMIN_PASSWORD`** and save it.
 3. Click **Apply**. The first build takes ~5 minutes. Migrations run on startup.
 4. Open `https://<your-service>.onrender.com/readyz`. It should show
@@ -88,11 +107,27 @@ docker compose run --rm --no-deps \
   backend python -m app.scripts.seed_dev
 ```
 
+Then embed the seeded places and reviews for AI search. This takes a few requests:
+
+```bash
+docker compose run --rm --no-deps \
+  -e ENV=production \
+  -e JWT_SECRET=unused-for-seeding \
+  -e DATABASE_URL='<DATABASE_URL>' \
+  -e AI_ENABLED=true \
+  -e LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai \
+  -e LLM_API_KEY='<LLM_API_KEY>' -e LLM_MODEL='<LLM_MODEL>' \
+  -e EMBEDDING_MODEL=gemini-embedding-001 \
+  backend python -m app.scripts.embed_backfill
+```
+
+Review summaries need no step: the API's worker writes them while it's awake.
+
 On a public deployment only `demo@pinstagram.app` / `demo1234` is a known login. The
 admin uses your `ADMIN_PASSWORD`, and the other seeded users get random passwords. The
 shared demo account can't be deleted or renamed by visitors.
 
-## 5. Vercel (web app)
+## 6. Vercel (web app)
 
 1. Sign up at https://vercel.com with GitHub → **Add New** → **Project** → import `Pinstagram`.
 2. **Root Directory:** `mobile`. Framework preset: **Other**. Build settings come from
@@ -105,7 +140,7 @@ shared demo account can't be deleted or renamed by visitors.
    | `EXPO_PUBLIC_DEMO_PASSWORD` | `demo1234` |
 4. **Deploy.** Note the URL, e.g. `https://pinstagram-xyz.vercel.app`.
 
-## 6. Connect them
+## 7. Connect them
 
 1. Render → your service → **Environment** → set `CORS_ORIGINS` to your exact Vercel URL
    (no trailing slash; add the admin dashboard URL too, comma-separated, if you deploy it).

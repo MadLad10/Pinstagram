@@ -125,9 +125,11 @@ After that the worker keeps embeddings and summaries up to date. On a CPU, the a
 AI_ENABLED=true
 LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
 LLM_API_KEY=<your key>
-LLM_MODEL=gemini-2.5-flash-lite
+LLM_MODEL=<a Flash-Lite model your key lists>
 EMBEDDING_MODEL=gemini-embedding-001   # truncated to 1024 dims
 ```
+
+[DEPLOY.md](DEPLOY.md#4-gemini-ai-features) shows how to list the models your key can use.
 
 Switching embedding models means re-running `embed_backfill`, since vectors from different models can't be compared. Re-check `EMBEDDING_MIN_SIMILARITY` with the [eval script](#evaluation) too. On the web app, the AI features appear as the **Assistant** tab, natural-language search with filter chips in **Search**, and **What reviewers say** on place pages. The native app doesn't show them yet.
 

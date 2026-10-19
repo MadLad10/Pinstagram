@@ -37,3 +37,14 @@ services:
         value: auto
       - key: MEDIA_BASE_URL # R2 public bucket URL, https://pub-<id>.r2.dev
         sync: false
+      # AI features on Gemini's free tier (OpenAI-compatible endpoint).
+      - key: AI_ENABLED
+        value: "true"
+      - key: LLM_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai
+      - key: LLM_API_KEY # Google AI Studio API key
+        sync: false
+      - key: LLM_MODEL # a Flash-Lite or Flash model your key lists, see DEPLOY.md
+        sync: false
+      - key: EMBEDDING_MODEL # truncated to 1024 dims
+        value: gemini-embedding-001
