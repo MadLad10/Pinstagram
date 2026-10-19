@@ -57,8 +57,10 @@ PostGIS and pg_trgm are enabled automatically by the first migration.
    **→ `S3_ACCESS_KEY`** (Access Key ID), **→ `S3_SECRET_KEY`** (Secret Access Key),
    **→ `S3_ENDPOINT`** (`https://<account-id>.r2.cloudflarestorage.com`).
 
-> No R2 yet? Skip this step and set `UPLOADS_ENABLED=false` on the API. Everything
-> except posting new photos works, and the app explains why uploads are off.
+> Optional. The blueprint starts with `UPLOADS_ENABLED=false`, so you can skip this
+> step. Everything except posting new photos works, seeded photos included, and the
+> app explains why uploads are off. To turn uploads on later, add the four values
+> above to the Render service and set `UPLOADS_ENABLED=true`.
 
 ## 4. Gemini (AI features)
 
