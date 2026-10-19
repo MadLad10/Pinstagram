@@ -46,11 +46,15 @@ jobs:
       - run: pip install -e ".[dev]"
       - name: Install pgvector into the PostGIS service
         # Same steps as docker/postgres/Dockerfile (bullseye packages moved
-        # to apt-archive.postgresql.org).
+        # to apt-archive.postgresql.org). pgvector pulls in a newer
+        # postgresql-15 minor, so restart onto the new server binary or its
+        # contrib libraries (pg_trgm) fail to load.
         run: |
           docker exec ${{ job.services.postgres.id }} sh -c "
             sed -i 's|apt.postgresql.org/pub/repos/apt|apt-archive.postgresql.org/pub/repos/apt|' /etc/apt/sources.list.d/pgdg.list &&
             apt-get update -qq && apt-get install -y -qq postgresql-15-pgvector"
+          docker restart ${{ job.services.postgres.id }}
+          timeout 60 sh -c 'until docker exec ${{ job.services.postgres.id }} pg_isready -U app -d bdvisual -h 127.0.0.1; do sleep 1; done'
       - name: Lint
         run: |
           ruff check .
